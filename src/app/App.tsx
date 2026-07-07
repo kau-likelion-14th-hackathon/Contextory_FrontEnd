@@ -1,4 +1,5 @@
 import { SafeAreaView, StyleSheet } from "react-native";
+import { colors } from "../shared/constants/colors";
 import { HomeScreen } from "../screens/HomeScreen";
 
 export default function App() {
@@ -12,6 +13,6 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.background,
   },
 });

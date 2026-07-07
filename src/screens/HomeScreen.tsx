@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
+import { colors } from "../shared/constants/colors";
 
 export function HomeScreen() {
   return (
@@ -19,13 +20,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   title: {
-    color: "#0F1C2E",
+    color: colors.textPrimary,
     fontSize: 22,
     fontWeight: "700",
     marginBottom: 8,
   },
   description: {
-    color: "#253344",
+    color: colors.textSecondary,
     fontSize: 14,
     textAlign: "center",
   },
