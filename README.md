@@ -19,7 +19,7 @@ EXPO_PUBLIC_API_BASE_URL=
 
 ```txt
 src/
-├─ app/        # 앱 진입점
+├─ root/       # 앱 루트 컴포넌트
 ├─ screens/    # 화면 단위 컴포넌트
 └─ shared/     # 공통 컴포넌트, 상수, 타입, API 설정
 ```
