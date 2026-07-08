@@ -7,6 +7,10 @@ npm install
 npm run start
 ```
 
+## 실행 참고
+
+현재 프로젝트는 Expo SDK 57 기준입니다. App Store의 Expo Go가 프로젝트 SDK를 지원하지 않는 경우 QR 실행이 실패할 수 있으며, 이 경우 iOS 시뮬레이터 또는 지원되는 Expo Go 버전으로 확인합니다.
+
 ## 환경 변수
 
 `.env.example`을 참고해서 루트 경로에 `.env` 파일을 생성합니다.
