@@ -1,26 +1,8 @@
 # Dependencies
 node_modules/
 
-# Expo
-.expo/
-.expo-shared/
+# Build outputs
 dist/
-web-build/
-
-# Native build outputs
-android/.gradle/
-android/app/build/
-android/build/
-ios/build/
-
-# Expo / EAS
-.eas/
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-*.orig.*
 
 # Environment variables
 .env
@@ -50,10 +32,3 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
-
-# React Native / Metro
-.metro-health-check*
-
-# generated native folders
-/ios
-/android
