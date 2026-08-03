@@ -1,0 +1,260 @@
+import { Link, useParams } from "react-router-dom";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+} from "../../shared/components/AppState";
+import { projectSummary } from "../projects/projectSummary";
+
+type AuthMode = "login" | "signup" | "forgot-password";
+
+export function SimpleAuthScreen({ mode }: { mode: AuthMode }) {
+  const copy = {
+    login: {
+      title: "Login",
+      body: "이메일 로그인 API 명세가 확정되면 실제 입력, 검증, 세션 복원 흐름을 연결합니다.",
+      action: "Continue to projects",
+    },
+    signup: {
+      title: "Sign up",
+      body: "회원가입 필드와 약관 정책은 최신 인증 명세를 기준으로 연결합니다.",
+      action: "Create placeholder account",
+    },
+    "forgot-password": {
+      title: "Forgot password",
+      body: "비밀번호 재설정 요청 API가 확정되면 이메일 발송 흐름을 연결합니다.",
+      action: "Back to login",
+    },
+  }[mode];
+
+  return (
+    <main className="auth-layout">
+      <section className="auth-hero" aria-labelledby="auth-title">
+        <p className="eyebrow">Contextory</p>
+        <h1 id="auth-title">팀의 작업 맥락을 기억하고 연결하는 AI 프로젝트 메모리</h1>
+      </section>
+      <section className="auth-panel" aria-label={copy.title}>
+        <h2>{copy.title}</h2>
+        <p>{copy.body}</p>
+        <Link
+          className="button button--primary"
+          to={mode === "forgot-password" ? "/auth/login" : "/projects"}
+        >
+          {copy.action}
+        </Link>
+        <div className="inline-links">
+          <Link to="/auth/login">Login</Link>
+          <Link to="/auth/signup">Sign up</Link>
+          <Link to="/auth/forgot-password">Forgot password</Link>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+export function ResetPasswordScreen() {
+  return (
+    <main className="auth-layout">
+      <section className="auth-panel">
+        <h1>Reset password</h1>
+        <p>
+          재설정 token 전달 방식과 만료 정책은 인증 API 명세가 확정되면
+          연결합니다.
+        </p>
+        <Link className="button button--primary" to="/auth/login">
+          Back to login
+        </Link>
+      </section>
+    </main>
+  );
+}
+
+export function InvitationScreen() {
+  const { token } = useParams();
+
+  return (
+    <main className="screen">
+      <section className="section">
+        <p className="eyebrow">Invitation</p>
+        <h1>Project invitation</h1>
+        <p className="text-muted">
+          초대 토큰 `{token}`은 로그인 또는 회원가입 이후 복구되어야 합니다.
+          실제 검증은 초대 API 명세가 확정되면 연결합니다.
+        </p>
+        <Link className="button button--primary" to="/auth/login">
+          Continue with account
+        </Link>
+      </section>
+    </main>
+  );
+}
+
+export function ProjectSelectScreen() {
+  return (
+    <main className="screen">
+      <section className="section">
+        <p className="eyebrow">Projects</p>
+        <h1>Project Select</h1>
+        <p className="text-muted">
+          로그인 이후 프로젝트 선택 전 영역입니다. 프로젝트 목록과 생성 흐름은
+          최신 프로젝트 API 명세를 받은 뒤 연결합니다.
+        </p>
+        <article className="card">
+          <h2>{projectSummary.name}</h2>
+          <p>Contextory 초기 기반 검증용 프로젝트 자리입니다.</p>
+          <Link className="button button--primary" to={`/projects/${projectSummary.id}/home`}>
+            Enter project
+          </Link>
+        </article>
+      </section>
+    </main>
+  );
+}
+
+export function ProjectCreateScreen() {
+  return (
+    <main className="screen">
+      <section className="section">
+        <h1>New project</h1>
+        <EmptyState
+          title="Project creation is not connected"
+          description="프로젝트 이름, 목적, 주요 기능, 팀 역할 입력은 백엔드 명세 확정 후 연결합니다."
+        />
+      </section>
+    </main>
+  );
+}
+
+export function ProjectHomeScreen() {
+  return (
+    <main className="screen">
+      <section className="section">
+        <h1>Project Home</h1>
+        <div className="state-grid">
+          <EmptyState
+            title="No approved project records yet"
+            description="승인된 프로젝트 기록과 내 역할에 영향을 주는 변경을 이 영역에 표시합니다."
+          />
+          <LoadingState
+            title="Follow-up task area"
+            description="후속 작업 목록 API가 확정되면 확인 필요와 완료 상태를 분리합니다."
+          />
+        </div>
+      </section>
+    </main>
+  );
+}
+
+export function GitHubWorkScreen() {
+  return (
+    <main className="screen">
+      <section className="section">
+        <h1>GitHub Work</h1>
+        <ErrorState
+          title="Repository is not connected"
+          description="GitHub 계정 로그인과 저장소 데이터 연동은 분리해서 처리합니다. 저장소 연결 API 명세가 필요합니다."
+        />
+      </section>
+    </main>
+  );
+}
+
+export function GitHubPullRequestPlaceholder() {
+  const { pullRequestId } = useParams();
+
+  return (
+    <main className="screen">
+      <section className="section">
+        <h1>Pull request review</h1>
+        <p className="text-muted">
+          PR `{pullRequestId}`의 diff와 AI 분석 비교 화면은 API 명세 확정 후
+          연결합니다.
+        </p>
+      </section>
+    </main>
+  );
+}
+
+export function AnalysisReviewPlaceholder() {
+  const { analysisId } = useParams();
+
+  return (
+    <main className="screen">
+      <section className="section">
+        <h1>Analysis review</h1>
+        <p className="text-muted">
+          분석 `{analysisId}`의 검토, 수정, 승인 요청 흐름은 API 명세 확정 후
+          연결합니다.
+        </p>
+      </section>
+    </main>
+  );
+}
+
+export function ProjectMemoryScreen() {
+  return (
+    <main className="screen">
+      <section className="section">
+        <h1>Project Memory</h1>
+        <EmptyState
+          title="No project memory records"
+          description="AI 분석 초안이 사람의 검토와 관리자 승인을 거친 뒤 공식 기록으로 노출됩니다."
+        />
+      </section>
+    </main>
+  );
+}
+
+export function ProjectRecordDetailScreen() {
+  const { recordId } = useParams();
+
+  return (
+    <main className="screen">
+      <section className="section">
+        <h1>Project record</h1>
+        <p className="text-muted">
+          기록 `{recordId}` 상세의 작업 목적, 변경 이유, 역할별 영향, 근거는
+          프로젝트 메모리 API 명세 확정 후 연결합니다.
+        </p>
+      </section>
+    </main>
+  );
+}
+
+export function TeamSettingsScreen() {
+  return (
+    <main className="screen">
+      <section className="section">
+        <h1>Team & Settings</h1>
+        <dl className="definition-list">
+          <div>
+            <dt>Project role</dt>
+            <dd>{projectSummary.role}</dd>
+          </div>
+          <div>
+            <dt>Repository</dt>
+            <dd>Not connected</dd>
+          </div>
+          <div>
+            <dt>Approval policy</dt>
+            <dd>Requires manager approval</dd>
+          </div>
+        </dl>
+      </section>
+    </main>
+  );
+}
+
+export function NotFoundScreen() {
+  return (
+    <main className="screen">
+      <section className="section">
+        <h1>Page not found</h1>
+        <p className="text-muted">요청한 Contextory 경로를 찾을 수 없습니다.</p>
+        <Link className="button button--primary" to="/projects">
+          Go to projects
+        </Link>
+      </section>
+    </main>
+  );
+}
