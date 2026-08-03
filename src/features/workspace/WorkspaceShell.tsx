@@ -1,41 +1,34 @@
+import { useState } from "react";
 import { NavLink, Outlet, useParams } from "react-router-dom";
 import { mainNavigation } from "../../shared/navigation/routes";
+import { ProjectSidebar } from "./components/ProjectSidebar";
+import { TopBar } from "./components/TopBar";
 
 export function WorkspaceShell() {
   const { projectId = "unknown-project" } = useParams();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="workspace-shell">
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">Contextory</p>
-          <h1>{projectId}</h1>
-        </div>
-        <NavLink className="button button--secondary" to="/account">
-          Account
-        </NavLink>
-      </header>
+    <div className="workspace-route-shell">
+      <TopBar
+        title={projectId}
+        subtitle="Repository not connected"
+        onMenuClick={() => setSidebarOpen(true)}
+        actions={
+          <NavLink className="ui-button ui-button--secondary ui-button--md" to="/account">
+            Account
+          </NavLink>
+        }
+      />
 
-      <div className="workspace-body">
-        <aside className="sidebar" aria-label="Project navigation">
-          <div className="sidebar__summary">
-            <strong>Contextory MVP</strong>
-            <span>Repository not connected</span>
-          </div>
-          <nav className="sidebar__nav">
-            {mainNavigation.map((item) => (
-              <NavLink
-                className={({ isActive }) =>
-                  isActive ? "sidebar__link sidebar__link--active" : "sidebar__link"
-                }
-                key={item.path}
-                to={item.path}
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
-        </aside>
+      <div className="workspace-route-shell__body">
+        <ProjectSidebar
+          projectName="Contextory MVP"
+          repositoryLabel="Repository not connected"
+          items={mainNavigation.map((item) => ({ label: item.label, to: item.path }))}
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
         <Outlet />
       </div>
     </div>

@@ -1,0 +1,107 @@
+.project-sidebar {
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  display: grid;
+  gap: 12px;
+  grid-template-rows: auto auto 1fr;
+  min-height: 100%;
+  padding: 18px;
+  z-index: 41;
+}
+
+.project-sidebar-backdrop {
+  background: var(--color-overlay);
+  border: 0;
+  inset: 0;
+  padding: 0;
+  position: fixed;
+  z-index: 39;
+}
+
+.project-sidebar__summary {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.project-sidebar__summary span {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.project-sidebar__close {
+  display: none;
+}
+
+.project-sidebar__nav {
+  display: grid;
+  gap: 6px;
+}
+
+.project-sidebar__link {
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: block;
+  font-weight: 800;
+  padding: 10px;
+  text-align: left;
+  text-decoration: none;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+  width: 100%;
+}
+
+.project-sidebar__link:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-primary);
+}
+
+.project-sidebar__link--active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+@media (max-width: 767px) {
+  .project-sidebar {
+    box-shadow: var(--shadow-md);
+    inset: 0 auto 0 0;
+    max-width: min(320px, calc(100vw - 32px));
+    pointer-events: none;
+    position: fixed;
+    transform: translateX(-105%);
+    transition: transform 160ms ease;
+    visibility: hidden;
+    width: 86vw;
+    z-index: 40;
+  }
+
+  .project-sidebar--open {
+    pointer-events: auto;
+    transform: translateX(0);
+    visibility: visible;
+  }
+
+  .project-sidebar__close {
+    align-items: center;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: inline-flex;
+    justify-content: center;
+    min-height: 44px;
+    padding-inline: 12px;
+    width: fit-content;
+  }
+}
+
+@media (min-width: 768px) {
+  .project-sidebar-backdrop {
+    display: none;
+  }
+}
