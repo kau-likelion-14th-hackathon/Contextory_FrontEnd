@@ -1,0 +1,26 @@
+.form-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.form-field__label {
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.form-field__helper,
+.form-field__error {
+  font-size: 13px;
+  margin: 0;
+}
+
+.form-field__helper {
+  color: var(--color-text-muted);
+}
+
+.form-field__error {
+  color: var(--color-danger);
+}

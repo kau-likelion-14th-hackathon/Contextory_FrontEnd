@@ -1,0 +1,83 @@
+.feedback-state {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px;
+}
+
+.feedback-state__icon {
+  align-items: center;
+  background: var(--color-surface-muted);
+  border-radius: 999px;
+  color: var(--color-primary);
+  display: inline-flex;
+  font-weight: 900;
+  height: 36px;
+  justify-content: center;
+  width: 36px;
+}
+
+.feedback-state__icon svg {
+  fill: none;
+  height: 20px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  width: 20px;
+}
+
+.feedback-state__spinner {
+  animation: feedback-spin 800ms linear infinite;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  border-right-color: transparent;
+  height: 20px;
+  width: 20px;
+}
+
+.feedback-state__copy {
+  display: grid;
+  gap: 4px;
+}
+
+.feedback-state__label {
+  color: var(--color-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.feedback-state h2,
+.feedback-state p {
+  margin: 0;
+}
+
+.feedback-state p {
+  color: var(--color-text-secondary);
+}
+
+.feedback-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.feedback-state--error .feedback-state__label,
+.feedback-state--error .feedback-state__icon {
+  color: var(--color-danger);
+}
+
+.feedback-state--success .feedback-state__label,
+.feedback-state--success .feedback-state__icon {
+  color: var(--color-secondary);
+}
+
+@keyframes feedback-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

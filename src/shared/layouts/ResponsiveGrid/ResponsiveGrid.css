@@ -1,0 +1,17 @@
+.responsive-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(var(--grid-desktop-columns), minmax(0, 1fr));
+}
+
+@media (max-width: 1199px) {
+  .responsive-grid {
+    grid-template-columns: repeat(var(--grid-tablet-columns), minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  .responsive-grid {
+    grid-template-columns: 1fr;
+  }
+}

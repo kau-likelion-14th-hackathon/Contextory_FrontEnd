@@ -1,0 +1,27 @@
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.button-group--start {
+  justify-content: flex-start;
+}
+
+.button-group--end {
+  justify-content: flex-end;
+}
+
+.button-group--stretch > * {
+  flex: 1 1 0;
+}
+
+@media (max-width: 767px) {
+  .button-group--stack-mobile {
+    flex-direction: column;
+  }
+
+  .button-group--stack-mobile > * {
+    width: 100%;
+  }
+}

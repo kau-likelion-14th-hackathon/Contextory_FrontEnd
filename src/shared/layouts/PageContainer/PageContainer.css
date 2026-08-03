@@ -1,0 +1,29 @@
+.page-container {
+  margin-inline: auto;
+  padding: var(--space-page-desktop);
+  width: 100%;
+}
+
+.page-container--md {
+  max-width: 960px;
+}
+
+.page-container--lg {
+  max-width: 1200px;
+}
+
+.page-container--full {
+  max-width: none;
+}
+
+@media (max-width: 1199px) {
+  .page-container {
+    padding: var(--space-page-tablet);
+  }
+}
+
+@media (max-width: 767px) {
+  .page-container {
+    padding: var(--space-page-mobile);
+  }
+}

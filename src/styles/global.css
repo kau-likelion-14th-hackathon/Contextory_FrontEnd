@@ -1,25 +1,135 @@
+@font-face {
+  font-family: "Noto Sans KR";
+  src: url("/fonts/NotoSansKR-Thin.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 100;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans KR";
+  src: url("/fonts/NotoSansKR-ExtraLight.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 200;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans KR";
+  src: url("/fonts/NotoSansKR-Light.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans KR";
+  src: url("/fonts/NotoSansKR-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans KR";
+  src: url("/fonts/NotoSansKR-Medium.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans KR";
+  src: url("/fonts/NotoSansKR-SemiBold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans KR";
+  src: url("/fonts/NotoSansKR-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans KR";
+  src: url("/fonts/NotoSansKR-ExtraBold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Noto Sans KR";
+  src: url("/fonts/NotoSansKR-Black.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "D2Coding";
+  src: url("/fonts/D2Coding-Ver1.3.3-20260725.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "D2Coding";
+  src: url("/fonts/D2CodingBold-Ver1.3.3-20260725.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light;
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  --font-sans:
+    "Noto Sans KR", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-mono:
+    "D2Coding", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-sans);
   line-height: 1.5;
   font-weight: 400;
 
-  --color-primary: #2563eb;
+  --color-primary: #0d7a55;
+  --color-primary-hover: #0a6a49;
+  --color-primary-active: #07563b;
+  --color-primary-soft: #e6f4ef;
   --color-secondary: #0f766e;
-  --color-warning: #b45309;
-  --color-danger: #b91c1c;
-  --color-background: #ffffff;
+  --color-warning: #b86b12;
+  --color-warning-soft: #fff4e5;
+  --color-danger: #c83232;
+  --color-danger-hover: #b22626;
+  --color-danger-soft: #fdecec;
+  --color-info: #2f6fbd;
+  --color-info-soft: #edf4ff;
+  --color-success-soft: #e6f4ef;
+  --color-background: #fbfcfb;
   --color-surface: #ffffff;
-  --color-surface-muted: #f9fafb;
-  --color-text-primary: #17202a;
-  --color-text-secondary: #374151;
-  --color-text-muted: #6b7280;
+  --color-surface-muted: #f5faf7;
+  --color-text-primary: #17211c;
+  --color-text-secondary: #3f4d46;
+  --color-text-muted: #718078;
   --color-text-on-primary: #ffffff;
-  --color-border: #e5e7eb;
-  --color-border-strong: #d1d5db;
-  --color-disabled: #f3f4f6;
+  --color-border: #e1e8e4;
+  --color-border-strong: #c7d4ce;
+  --color-disabled: #eef3f0;
+  --color-focus-ring: rgb(13 122 85 / 30%);
+  --color-overlay: rgb(17 24 39 / 56%);
+  --shadow-sm: 0 1px 2px rgb(17 24 39 / 8%);
+  --shadow-md: 0 12px 30px rgb(17 24 39 / 14%);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --space-page-desktop: 32px;
+  --space-page-tablet: 24px;
+  --space-page-mobile: 16px;
 
   background: var(--color-background);
   color: var(--color-text-primary);
@@ -50,99 +160,71 @@ a {
   color: inherit;
 }
 
+code,
+pre,
+kbd,
+samp,
+.code-text,
+.file-path,
+.api-path,
+.branch-name,
+.commit-hash,
+.diff-content {
+  font-family: var(--font-mono);
+}
+
+pre {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+code,
+.file-path,
+.api-path,
+.branch-name,
+.commit-hash {
+  overflow-wrap: anywhere;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
 #root {
   min-height: 100vh;
 }
 
-.auth-layout {
-  align-items: center;
-  display: grid;
-  gap: 32px;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
-  min-height: 100vh;
-  padding: 48px;
-}
-
-.auth-hero {
-  max-width: 760px;
-}
-
-.auth-hero h1 {
-  font-size: 48px;
-  line-height: 1.08;
-  margin: 8px 0 0;
-}
-
-.auth-panel,
-.card,
-.state-panel {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 20px;
-}
-
-.auth-panel {
+.auth-card,
+.content-section {
   display: grid;
   gap: 16px;
 }
 
-.inline-links {
+.auth-card h1,
+.auth-card h2,
+.auth-card p,
+.content-section h1,
+.content-section h2,
+.content-section p {
+  margin: 0;
+}
+
+.inline-link-group {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
 }
 
-.inline-links a {
+.inline-link-group a {
   color: var(--color-primary);
   font-size: 14px;
   font-weight: 700;
   text-decoration: none;
 }
 
-.button {
-  align-items: center;
-  border-radius: 6px;
-  cursor: pointer;
-  display: inline-flex;
-  font-size: 14px;
-  font-weight: 700;
-  justify-content: center;
-  line-height: 1;
-  min-height: 38px;
-  padding: 0 14px;
-  text-decoration: none;
-  width: fit-content;
-}
-
-.button--primary {
-  background: var(--color-primary);
-  border: 1px solid var(--color-primary);
-  color: var(--color-text-on-primary);
-}
-
-.button--secondary {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-strong);
-  color: var(--color-text-primary);
-}
-
-.workspace-shell {
+.workspace-route-shell {
   min-height: 100vh;
-}
-
-.topbar {
-  align-items: center;
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 16px 24px;
-}
-
-.topbar h1 {
-  font-size: 20px;
-  margin: 2px 0 0;
 }
 
 .eyebrow {
@@ -154,161 +236,57 @@ a {
   text-transform: uppercase;
 }
 
-.workspace-body {
+.workspace-route-shell__body {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
   min-height: calc(100vh - 73px);
 }
 
-.sidebar {
-  border-right: 1px solid var(--color-border);
-  padding: 18px;
-}
-
-.sidebar__summary {
-  display: grid;
-  gap: 4px;
-  margin-bottom: 16px;
-}
-
-.sidebar__summary span {
-  color: var(--color-text-muted);
-  font-size: 13px;
-}
-
-.sidebar__nav {
-  display: grid;
-  gap: 6px;
-}
-
-.sidebar__link {
-  border-radius: 6px;
-  color: var(--color-text-secondary);
-  font-size: 14px;
-  font-weight: 700;
-  padding: 10px;
-  text-decoration: none;
-}
-
-.sidebar__link--active {
-  background: var(--color-surface-muted);
-  color: var(--color-primary);
-}
-
-.screen {
-  padding: 24px;
-}
-
-.section {
-  display: grid;
-  gap: 16px;
+.content-section {
   max-width: 1040px;
 }
 
-.section h1 {
+.content-section h1 {
   font-size: 30px;
   line-height: 1.15;
-  margin: 0;
-}
-
-.section h2,
-.auth-panel h2,
-.card h2,
-.state-panel h2 {
-  font-size: 18px;
-  line-height: 1.25;
-  margin: 0;
-}
-
-.section p,
-.auth-panel p,
-.card p,
-.state-panel p {
-  margin: 0;
 }
 
 .text-muted {
   color: var(--color-text-secondary);
 }
 
-.state-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.state-panel {
-  display: grid;
-  gap: 8px;
-}
-
-.state-panel__label {
-  color: var(--color-secondary);
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.state-panel__label--error {
-  color: var(--color-danger);
-}
-
-.definition-list {
+.definition-list-panel {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   margin: 0;
 }
 
-.definition-list div {
+.definition-list-panel div {
   border-bottom: 1px solid var(--color-border);
   display: grid;
   gap: 4px;
   padding: 14px;
 }
 
-.definition-list div:last-child {
+.definition-list-panel div:last-child {
   border-bottom: 0;
 }
 
-.definition-list dt {
+.definition-list-panel dt {
   color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
 }
 
-.definition-list dd {
+.definition-list-panel dd {
   color: var(--color-text-primary);
   font-weight: 700;
   margin: 0;
 }
 
-@media (max-width: 760px) {
-  .auth-layout {
-    align-items: stretch;
-    grid-template-columns: 1fr;
-    padding: 24px;
-  }
-
-  .auth-hero h1 {
-    font-size: 32px;
-  }
-
-  .workspace-body {
-    grid-template-columns: 1fr;
-  }
-
-  .sidebar {
-    border-bottom: 1px solid var(--color-border);
-    border-right: 0;
-  }
-
-  .sidebar__nav {
-    display: flex;
-    flex-wrap: wrap;
-  }
-
-  .state-grid {
+@media (max-width: 767px) {
+  .workspace-route-shell__body {
     grid-template-columns: 1fr;
   }
 }

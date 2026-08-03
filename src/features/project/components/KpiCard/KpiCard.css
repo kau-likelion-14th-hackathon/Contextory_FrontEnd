@@ -1,0 +1,26 @@
+.kpi-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 18px;
+}
+
+.kpi-card p {
+  color: var(--color-text-secondary);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.kpi-card strong {
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.kpi-card span {
+  color: var(--color-secondary);
+  font-size: 13px;
+  font-weight: 800;
+}

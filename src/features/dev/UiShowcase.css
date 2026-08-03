@@ -1,0 +1,118 @@
+.ui-showcase {
+  display: grid;
+  gap: 24px;
+}
+
+.ui-showcase__header,
+.ui-showcase__section {
+  display: grid;
+  gap: 14px;
+}
+
+.ui-showcase__header h1,
+.ui-showcase__header p,
+.ui-showcase__section h2 {
+  margin: 0;
+}
+
+.ui-showcase__header p {
+  color: var(--color-text-secondary);
+}
+
+.ui-showcase__section {
+  border-top: 1px solid var(--color-border);
+  padding-top: 24px;
+}
+
+.ui-showcase__font-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ui-showcase__font-sample {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.ui-showcase__font-sample p,
+.ui-showcase__font-sample pre {
+  margin: 0;
+}
+
+.ui-showcase__font-sample strong {
+  font-size: 20px;
+}
+
+.ui-showcase__font-label {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.ui-showcase__font-sample pre {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  padding: 12px;
+}
+
+.ui-showcase__code-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ui-showcase__code-list span {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.ui-showcase__rows {
+  display: grid;
+  gap: 12px;
+}
+
+.ui-showcase__layout-preview {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  max-height: 520px;
+  overflow: auto;
+}
+
+.ui-showcase__layout-preview > .ui-button {
+  margin: 12px;
+}
+
+.ui-showcase__modal-scroll {
+  display: grid;
+  gap: 10px;
+}
+
+.ui-showcase__modal-scroll p {
+  margin: 0;
+}
+
+.ui-showcase__layout-preview .auth-layout-shell {
+  min-height: 460px;
+}
+
+.ui-showcase__layout-preview .project-layout {
+  min-height: 460px;
+}
+
+@media (max-width: 767px) {
+  .ui-showcase__font-grid {
+    grid-template-columns: 1fr;
+  }
+}

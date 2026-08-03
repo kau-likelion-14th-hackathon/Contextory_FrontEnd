@@ -1,0 +1,37 @@
+.project-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+}
+
+.project-card__header,
+.project-card__footer {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.project-card h2,
+.project-card p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.project-card__header p,
+.project-card__description,
+.project-card__footer {
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 767px) {
+  .project-card__header,
+  .project-card__footer {
+    flex-direction: column;
+  }
+}

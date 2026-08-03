@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AccountSettingsScreen } from "../features/account/AccountSettingsScreen";
+import { UiShowcase } from "../features/dev/UiShowcase";
 import {
   AuthBoundary,
   ProjectBoundary,
@@ -45,6 +46,10 @@ export const router = createBrowserRouter([
   {
     path: "/invitations/:token",
     element: <InvitationScreen />,
+  },
+  {
+    path: "/dev/ui",
+    element: <UiShowcase />,
   },
   {
     element: <AuthBoundary />,
