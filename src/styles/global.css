@@ -238,8 +238,8 @@ code,
 
 .workspace-route-shell__body {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  min-height: calc(100vh - 73px);
+  grid-template-columns: 184px minmax(0, 1fr);
+  min-height: calc(100vh - 64px);
 }
 
 .content-section {
