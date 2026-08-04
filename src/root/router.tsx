@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AccountSettingsScreen } from "../features/account/AccountSettingsScreen";
 import { UiShowcase } from "../features/dev/UiShowcase";
+import { ProjectHomeScreen } from "../features/project/ProjectHomeScreen";
 import {
   AuthBoundary,
   ProjectBoundary,
@@ -13,7 +14,6 @@ import {
   InvitationScreen,
   NotFoundScreen,
   ProjectCreateScreen,
-  ProjectHomeScreen,
   ProjectMemoryScreen,
   ProjectRecordDetailScreen,
   ProjectSelectScreen,
