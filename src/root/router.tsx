@@ -53,7 +53,7 @@ export const router = createBrowserRouter([
   },
   {
     path: "/invitations/:token",
-    element: <ProjectJoinScreen />,
+    element: <ProjectJoinScreen />, // 프로젝트 초대 화면
   },
   {
     path: "/dev/ui",

@@ -37,12 +37,12 @@ export function SimpleAuthScreen({ mode }: { mode: AuthMode }) {
           <span style={{ color: "#0D7A55" }}>더 나은 협업을 만들어가세요</span>
         </span>
       }
-      description={
+      description="{
         <span>
           GitHub 변경을 수집하고 AI가 분석한 맥락을<br/>
           검토·승인하여 팀의 프로젝트 메모리로 남깁니다.
         </span>
-      }
+      }"
     >
       <div className="auth-card" aria-label={copy.title}>
         <h2>{copy.title}</h2>
@@ -63,6 +63,7 @@ export function SimpleAuthScreen({ mode }: { mode: AuthMode }) {
   );
 }
 
+/*
 export function ResetPasswordScreen() {
   return (
     <AuthLayout title="Reset password" description="비밀번호 재설정 링크를 통해 계정을 복구합니다.">
@@ -78,29 +79,29 @@ export function ResetPasswordScreen() {
       </div>
     </AuthLayout>
   );
-}
+} */
 
-export function InvitationScreen() {
-  const { token } = useParams();
+// export function InvitationScreen() {
+//   const { token } = useParams();
 
-  return (
-    <main>
-      <PageContainer>
-      <section className="content-section">
-        <p className="eyebrow">Invitation</p>
-        <h1>Project invitation</h1>
-        <p className="text-muted">
-          초대 토큰 `{token}`은 로그인 또는 회원가입 이후 복구되어야 합니다.
-          실제 검증은 초대 API 명세가 확정되면 연결합니다.
-        </p>
-        <Link className="ui-button ui-button--primary ui-button--md" to="/auth/login">
-          Continue with account
-        </Link>
-      </section>
-      </PageContainer>
-    </main>
-  );
-}
+//   return (
+//     <main>
+//       <PageContainer>
+//       <section className="content-section">
+//         <p className="eyebrow">Invitation</p>
+//         <h1>Project invitation</h1>
+//         <p className="text-muted">
+//           초대 토큰 `{token}`은 로그인 또는 회원가입 이후 복구되어야 합니다.
+//           실제 검증은 초대 API 명세가 확정되면 연결합니다.
+//         </p>
+//         <Link className="ui-button ui-button--primary ui-button--md" to="/auth/login">
+//           Continue with account
+//         </Link>
+//       </section>
+//       </PageContainer>
+//     </main>
+//   );
+// }
 
 export function ProjectSelectScreen() {
   return (
