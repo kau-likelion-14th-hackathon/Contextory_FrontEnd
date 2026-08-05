@@ -5,6 +5,8 @@ import { AuthScreen} from "../features/auth/AuthScreen";
 import { PasswordRecoveryScreen } from "../features/auth/PasswordRecoveryScreen";
 import { EmailVerificationScreen } from "../features/auth/EmailVerificationScreen";
 import { ProjectJoinScreen } from "../features/auth/ProjectJoinScreen";
+import { ProjectHomeScreen } from "../features/project/ProjectHomeScreen";
+import { GitHubWorkScreen } from "../features/github/GitHubWorkScreen";
 import {
   AuthBoundary,
   ProjectBoundary,
@@ -13,16 +15,11 @@ import { WorkspaceShell } from "../features/workspace/WorkspaceShell";
 import {
   AnalysisReviewPlaceholder,
   GitHubPullRequestPlaceholder,
-  GitHubWorkScreen,
-  //InvitationScreen,
   NotFoundScreen,
   ProjectCreateScreen,
-  ProjectHomeScreen,
   ProjectMemoryScreen,
   ProjectRecordDetailScreen,
   ProjectSelectScreen,
-  //ResetPasswordScreen,
-  SimpleAuthScreen,
   TeamSettingsScreen,
 } from "../features/workspace/WorkspaceScreens";
 

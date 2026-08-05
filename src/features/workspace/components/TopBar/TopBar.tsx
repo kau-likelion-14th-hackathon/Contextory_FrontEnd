@@ -3,11 +3,12 @@ import "./TopBar.css";
 export type TopBarProps = {
   title: string;
   subtitle?: string;
+  user?: string;
   actions?: React.ReactNode;
   onMenuClick?: () => void;
 };
 
-export function TopBar({ title, subtitle, actions, onMenuClick }: TopBarProps) {
+export function TopBar({ title, subtitle, user, actions, onMenuClick }: TopBarProps) {
   return (
     <header className="top-bar">
       <div className="top-bar__leading">
@@ -27,7 +28,12 @@ export function TopBar({ title, subtitle, actions, onMenuClick }: TopBarProps) {
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
       </div>
-      {actions ? <div className="top-bar__actions">{actions}</div> : null}
+      {actions || user ? (
+        <div className="top-bar__actions">
+          {actions}
+          {user ? <strong className="top-bar__user">{user}</strong> : null}
+        </div>
+      ) : null}
     </header>
   );
 }

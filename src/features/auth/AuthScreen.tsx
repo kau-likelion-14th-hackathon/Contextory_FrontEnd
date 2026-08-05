@@ -23,8 +23,8 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    // TODO: /api/auth/login, /api/auth/signup 명세 확정되면 실제 요청으로 교체
-    // 지금은 입력값 검증 없이 화면 흐름만 확인
+    // 명세 확정되면 실제 요청으로 교체
+    setLoading(true);
     navigate("/projects");
   }
 

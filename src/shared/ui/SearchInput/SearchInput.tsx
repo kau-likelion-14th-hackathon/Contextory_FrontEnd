@@ -8,7 +8,15 @@ export type SearchInputProps = Omit<InputProps, "type"> & {
 
 export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
   ({ value, onClear, className = "", ...props }, ref) => (
-    <div className={["search-input", className].filter(Boolean).join(" ")}>
+    <div
+      className={[
+        "search-input",
+        onClear ? "search-input--custom-clear" : "",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <span className="search-input__icon" aria-hidden="true">
         ⌕
       </span>
@@ -21,7 +29,7 @@ export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
       />
       {value && onClear ? (
         <button
-          aria-label="Clear search"
+          aria-label="검색어 지우기"
           className="search-input__clear"
           onClick={onClear}
           type="button"
