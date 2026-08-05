@@ -68,6 +68,24 @@
   flex: 0 0 150px;
 }
 
+.github-work__repository-filter {
+  height: 44px;
+  width: 150px;
+}
+
+.github-work__repository-filter > span {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.github-work__repository-filter-chevron {
+  align-items: center;
+  display: inline-flex;
+  line-height: 1;
+}
+
 .github-work__filter-chips {
   align-items: center;
   display: flex;

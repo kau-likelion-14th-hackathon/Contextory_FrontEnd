@@ -132,8 +132,19 @@ export function GitHubWorkScreen() {
                 placeholder="PR 제목, 번호, 작성자 검색..."
                 value={searchTerm}
               />
-              <Button aria-haspopup="listbox" size="md" variant="secondary">
-                모든 저장소 <span aria-hidden="true">⌄</span>
+              <Button
+                aria-haspopup="listbox"
+                className="github-work__repository-filter"
+                size="md"
+                variant="secondary"
+              >
+                모든 저장소
+                <span
+                  aria-hidden="true"
+                  className="github-work__repository-filter-chevron"
+                >
+                  ⌄
+                </span>
               </Button>
               <div className="github-work__filter-chips" aria-label="AI 분석 상태 필터">
                 {analysisFilters.map((filter) => (
