@@ -31,8 +31,18 @@ export function SimpleAuthScreen({ mode }: { mode: AuthMode }) {
 
   return (
     <AuthLayout
-      title="팀의 작업 맥락을 기억하고 연결하는 AI 프로젝트 메모리"
-      description="AI 분석 초안을 사람이 검토하고 승인한 뒤 프로젝트 메모리로 축적합니다."
+      title={
+        <span style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          <span style={{ color: "#132019" }}>프로젝트의 맥락을 이해하고,</span>
+          <span style={{ color: "#0D7A55" }}>더 나은 협업을 만들어가세요</span>
+        </span>
+      }
+      description={
+        <span>
+          GitHub 변경을 수집하고 AI가 분석한 맥락을<br/>
+          검토·승인하여 팀의 프로젝트 메모리로 남깁니다.
+        </span>
+      }
     >
       <div className="auth-card" aria-label={copy.title}>
         <h2>{copy.title}</h2>
