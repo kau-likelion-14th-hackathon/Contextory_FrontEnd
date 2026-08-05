@@ -1,10 +1,9 @@
 import { Link, useParams } from "react-router-dom";
 import { ProjectCard } from "../project/components";
-import { AuthLayout, PageContainer, ResponsiveGrid, SettingsLayout } from "../../shared/layouts";
+import { AuthLayout, PageContainer, SettingsLayout } from "../../shared/layouts";
 import {
   EmptyState,
   ErrorState,
-  LoadingState,
 } from "../../shared/components/AppState";
 import { projectSummary } from "../projects/projectSummary";
 
@@ -134,28 +133,6 @@ export function ProjectCreateScreen() {
           title="Project creation is not connected"
           description="프로젝트 이름, 목적, 주요 기능, 팀 역할 입력은 백엔드 명세 확정 후 연결합니다."
         />
-      </section>
-      </PageContainer>
-    </main>
-  );
-}
-
-export function ProjectHomeScreen() {
-  return (
-    <main>
-      <PageContainer>
-      <section className="content-section">
-        <h1>Project Home</h1>
-        <ResponsiveGrid desktopColumns={2} tabletColumns={2}>
-          <EmptyState
-            title="No approved project records yet"
-            description="승인된 프로젝트 기록과 내 역할에 영향을 주는 변경을 이 영역에 표시합니다."
-          />
-          <LoadingState
-            title="Follow-up task area"
-            description="후속 작업 목록 API가 확정되면 확인 필요와 완료 상태를 분리합니다."
-          />
-        </ResponsiveGrid>
       </section>
       </PageContainer>
     </main>
