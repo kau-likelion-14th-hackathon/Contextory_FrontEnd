@@ -3,7 +3,6 @@ import { ProjectCard } from "../project/components";
 import { AuthLayout, PageContainer, SettingsLayout } from "../../shared/layouts";
 import {
   EmptyState,
-  ErrorState,
 } from "../../shared/components/AppState";
 import { projectSummary } from "../projects/projectSummary";
 
@@ -132,22 +131,6 @@ export function ProjectCreateScreen() {
         <EmptyState
           title="Project creation is not connected"
           description="프로젝트 이름, 목적, 주요 기능, 팀 역할 입력은 백엔드 명세 확정 후 연결합니다."
-        />
-      </section>
-      </PageContainer>
-    </main>
-  );
-}
-
-export function GitHubWorkScreen() {
-  return (
-    <main>
-      <PageContainer>
-      <section className="content-section">
-        <h1>GitHub Work</h1>
-        <ErrorState
-          title="Repository is not connected"
-          description="GitHub 계정 로그인과 저장소 데이터 연동은 분리해서 처리합니다. 저장소 연결 API 명세가 필요합니다."
         />
       </section>
       </PageContainer>

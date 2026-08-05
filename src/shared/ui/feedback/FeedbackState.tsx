@@ -11,6 +11,7 @@ export type FeedbackStateProps = {
   visual?: React.ReactNode;
   title: string;
   description?: string;
+  details?: React.ReactNode;
   action?: FeedbackAction;
   secondaryAction?: FeedbackAction;
 };
@@ -20,6 +21,7 @@ function FeedbackState({
   visual,
   title,
   description,
+  details,
   action,
   secondaryAction,
   tone,
@@ -57,6 +59,7 @@ function FeedbackState({
         <h2>{title}</h2>
         {description ? <p>{description}</p> : null}
       </div>
+      {details ? <div className="feedback-state__details">{details}</div> : null}
       {action || secondaryAction ? (
         <div className="feedback-state__actions">
           {secondaryAction ? (

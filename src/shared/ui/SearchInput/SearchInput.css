@@ -19,6 +19,12 @@
   padding-right: 38px;
 }
 
+.search-input--custom-clear .search-input__field::-webkit-search-cancel-button,
+.search-input--custom-clear .search-input__field::-webkit-search-decoration {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 .search-input__clear {
   align-items: center;
   background: transparent;
@@ -37,6 +43,10 @@
 }
 
 @media (max-width: 767px) {
+  .search-input--custom-clear .search-input__field {
+    padding-right: 50px;
+  }
+
   .search-input__clear {
     height: 44px;
     right: 0;
