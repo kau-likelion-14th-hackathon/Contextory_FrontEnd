@@ -38,9 +38,11 @@ export function ProjectHomeScreen() {
     setFollowUps(data.followUps);
   }, [data.followUps]);
 
-  const completeFollowUp = (id: string) => {
+  const toggleFollowUp = (id: string) => {
     setFollowUps((items) =>
-      items.map((item) => (item.id === id ? { ...item, completed: true } : item)),
+      items.map((item) =>
+        item.id === id ? { ...item, completed: !item.completed } : item,
+      ),
     );
   };
 
@@ -121,11 +123,10 @@ export function ProjectHomeScreen() {
                       {followUps.map((item) => (
                         <article className="project-home__task" key={item.id}>
                           <Button
-                            aria-label={`${item.content} ${item.completed ? "완료됨" : "완료 처리"}`}
+                            aria-label={`${item.content} ${item.completed ? "완료 해제" : "완료 처리"}`}
                             aria-pressed={item.completed}
                             className="project-home__task-check"
-                            disabled={item.completed}
-                            onClick={() => completeFollowUp(item.id)}
+                            onClick={() => toggleFollowUp(item.id)}
                             size="sm"
                             variant="ghost"
                           >

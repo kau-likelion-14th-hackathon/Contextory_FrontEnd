@@ -160,13 +160,19 @@
   align-items: center;
   display: grid;
   gap: 12px;
-  grid-template-columns: 66px minmax(0, 1fr) 72px;
+  grid-template-columns: 80px minmax(0, 1fr) 72px;
   min-width: 0;
   padding: 12px 16px;
 }
 
 .project-home__update-badge {
   min-width: 0;
+}
+
+.project-home__update-badge .ui-badge {
+  max-width: 100%;
+  white-space: nowrap;
+  width: max-content;
 }
 
 .project-home__update-copy {
