@@ -5,6 +5,9 @@ export type PaginationProps = {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
+  ariaLabel?: string;
+  previousLabel?: string;
+  nextLabel?: string;
 };
 
 function getVisiblePages(currentPage: number, totalPages: number) {
@@ -18,18 +21,22 @@ export function Pagination({
   currentPage,
   totalPages,
   onPageChange,
+  ariaLabel = "Pagination",
+  previousLabel = "Previous",
+  nextLabel = "Next",
 }: PaginationProps) {
   const pages = getVisiblePages(currentPage, totalPages);
 
   return (
-    <nav className="pagination" aria-label="Pagination">
+    <nav className="pagination" aria-label={ariaLabel}>
       <Button
+        aria-label={previousLabel}
         disabled={currentPage <= 1}
         onClick={() => onPageChange(currentPage - 1)}
         size="sm"
         variant="secondary"
       >
-        Previous
+        {previousLabel}
       </Button>
       <div className="pagination__pages">
         {pages.map((page, index) => {
@@ -56,12 +63,13 @@ export function Pagination({
         })}
       </div>
       <Button
+        aria-label={nextLabel}
         disabled={currentPage >= totalPages}
         onClick={() => onPageChange(currentPage + 1)}
         size="sm"
         variant="secondary"
       >
-        Next
+        {nextLabel}
       </Button>
     </nav>
   );

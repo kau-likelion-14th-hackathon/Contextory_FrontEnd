@@ -1,4 +1,5 @@
-import { Badge } from "../../../../shared/ui";
+import { Link } from "react-router-dom";
+import { Badge, type BadgeVariant } from "../../../../shared/ui";
 import "./PullRequestRow.css";
 
 export type PullRequestRowProps = {
@@ -9,6 +10,16 @@ export type PullRequestRowProps = {
   updatedAt: string;
   filesChanged?: number;
   action?: React.ReactNode;
+  githubStatus?: string;
+  githubStatusVariant?: BadgeVariant;
+  headBranch?: string;
+  baseBranch?: string;
+  additions?: number;
+  deletions?: number;
+  analysisStatus?: string;
+  analysisStatusVariant?: BadgeVariant;
+  actionLabel?: string;
+  actionTo?: string;
 };
 
 export function PullRequestRow({
@@ -19,7 +30,59 @@ export function PullRequestRow({
   updatedAt,
   filesChanged,
   action,
+  githubStatus,
+  githubStatusVariant = "neutral",
+  headBranch,
+  baseBranch,
+  additions,
+  deletions,
+  analysisStatus,
+  analysisStatusVariant = "info",
+  actionLabel = "열기",
+  actionTo,
 }: PullRequestRowProps) {
+  const isDetailed = Boolean(
+    githubStatus || headBranch || baseBranch || analysisStatus || actionTo,
+  );
+
+  if (isDetailed) {
+    return (
+      <article className="pull-request-row pull-request-row--detailed">
+        <div className="pull-request-row__title-cell">
+          <h3><span>#{number}</span> {title}</h3>
+        </div>
+        <div className="pull-request-row__detail" data-label="작성자">{author}</div>
+        <div className="pull-request-row__detail" data-label="상태">
+          <Badge variant={githubStatusVariant}>{githubStatus ?? status}</Badge>
+        </div>
+        <div className="pull-request-row__branch" data-label="브랜치">
+          <span>{headBranch ?? "-"}</span>
+          {baseBranch ? <small>→ {baseBranch}</small> : null}
+        </div>
+        <div className="pull-request-row__detail" data-label="파일">
+          {filesChanged ?? 0}
+        </div>
+        <div className="pull-request-row__changes" data-label="변경 통계">
+          <span>+{additions ?? 0}</span> <small>-{deletions ?? 0}</small>
+        </div>
+        <div className="pull-request-row__detail" data-label="AI 상태">
+          <Badge variant={analysisStatusVariant}>{analysisStatus ?? status}</Badge>
+        </div>
+        <div className="pull-request-row__action">
+          {action ?? (actionTo ? (
+            <Link
+              aria-label={`Pull Request #${number} ${actionLabel}`}
+              className="ui-button ui-button--secondary ui-button--sm"
+              to={actionTo}
+            >
+              {actionLabel}
+            </Link>
+          ) : null)}
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article className="pull-request-row">
       <div className="pull-request-row__main">

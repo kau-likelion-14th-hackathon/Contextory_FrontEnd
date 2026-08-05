@@ -31,6 +31,161 @@
   justify-content: flex-end;
 }
 
+.pull-request-row--detailed {
+  border: 0;
+  border-radius: 0;
+  display: grid;
+  font-size: 10px;
+  gap: 0;
+  grid-template-columns: 370px 110px 105px 170px 65px 110px 118px 94px;
+  min-height: 72px;
+  padding: 0;
+}
+
+.pull-request-row--detailed > div {
+  align-items: center;
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.pull-request-row__title-cell h3 {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.pull-request-row__title-cell h3 span {
+  font-weight: 700;
+}
+
+.pull-request-row__branch {
+  align-items: flex-start !important;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pull-request-row__branch span,
+.pull-request-row__branch small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pull-request-row__branch small,
+.pull-request-row__changes small {
+  color: var(--color-text-muted);
+  font-size: inherit;
+}
+
+.pull-request-row__changes {
+  color: var(--color-primary);
+  gap: 5px;
+}
+
+.pull-request-row__action {
+  justify-content: center;
+  padding: 10px !important;
+}
+
+.pull-request-row__action .ui-button {
+  font-size: 12px;
+  min-height: 30px;
+  padding-inline: 12px;
+  width: 70px;
+}
+
+.pull-request-row--detailed .ui-badge {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1199px) {
+  .pull-request-row--detailed {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    gap: 12px 16px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding: 16px;
+  }
+
+  .pull-request-row--detailed > div {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .pull-request-row__title-cell {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .pull-request-row__detail[data-label="AI 상태"] {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .pull-request-row__detail[data-label="작성자"] {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .pull-request-row__branch {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .pull-request-row__detail[data-label="상태"] {
+    grid-column: 4;
+    grid-row: 2;
+  }
+
+  .pull-request-row__changes {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .pull-request-row__detail[data-label="파일"] {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .pull-request-row__title-cell h3 {
+    font-size: 14px;
+  }
+
+  .pull-request-row__detail,
+  .pull-request-row__branch,
+  .pull-request-row__changes {
+    align-items: flex-start;
+    display: grid !important;
+    gap: 4px;
+    justify-items: start;
+  }
+
+  .pull-request-row__detail::before,
+  .pull-request-row__branch::before,
+  .pull-request-row__changes::before {
+    color: var(--color-text-muted);
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .pull-request-row__action {
+    align-self: end;
+    grid-column: 3 / -1;
+    grid-row: 3;
+    justify-self: stretch;
+  }
+
+  .pull-request-row__action .ui-button {
+    min-height: 44px;
+    width: 100%;
+  }
+}
+
 @media (max-width: 767px) {
   .pull-request-row {
     grid-template-columns: 1fr;
@@ -38,5 +193,73 @@
 
   .pull-request-row__meta {
     justify-content: flex-start;
+  }
+
+  .pull-request-row--detailed {
+    gap: 8px 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 12px;
+  }
+
+  .pull-request-row--detailed > div:not(.pull-request-row__title-cell):not(.pull-request-row__action) {
+    grid-column: auto;
+  }
+
+  .pull-request-row__detail[data-label="AI 상태"] {
+    grid-column: 2 !important;
+    grid-row: 2;
+  }
+
+  .pull-request-row__detail[data-label="상태"] {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .pull-request-row__detail[data-label="작성자"] {
+    grid-row: 3;
+  }
+
+  .pull-request-row__branch {
+    grid-column: 1 / -1 !important;
+    grid-row: 4;
+  }
+
+  .pull-request-row__detail[data-label="파일"] {
+    grid-row: 3;
+  }
+
+  .pull-request-row__changes {
+    grid-column: 1 / -1 !important;
+    grid-row: 5;
+  }
+
+  .pull-request-row--detailed > div,
+  .pull-request-row__branch span,
+  .pull-request-row__branch small {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .pull-request-row__action {
+    grid-column: 1 / -1;
+    grid-row: 6;
+    justify-self: stretch;
+    padding: 0 !important;
+  }
+
+  .pull-request-row__action .ui-button {
+    min-height: 44px;
+    width: 100%;
+  }
+
+  .pull-request-row__title-cell h3 {
+    font-size: 13px;
+  }
+
+  .pull-request-row__detail,
+  .pull-request-row__branch,
+  .pull-request-row__changes {
+    gap: 2px;
   }
 }

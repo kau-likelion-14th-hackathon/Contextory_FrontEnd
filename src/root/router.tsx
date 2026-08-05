@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AccountSettingsScreen } from "../features/account/AccountSettingsScreen";
 import { UiShowcase } from "../features/dev/UiShowcase";
 import { ProjectHomeScreen } from "../features/project/ProjectHomeScreen";
+import { GitHubWorkScreen } from "../features/github/GitHubWorkScreen";
 import {
   AuthBoundary,
   ProjectBoundary,
@@ -10,7 +11,6 @@ import { WorkspaceShell } from "../features/workspace/WorkspaceShell";
 import {
   AnalysisReviewPlaceholder,
   GitHubPullRequestPlaceholder,
-  GitHubWorkScreen,
   InvitationScreen,
   NotFoundScreen,
   ProjectCreateScreen,
