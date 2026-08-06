@@ -259,8 +259,14 @@
 }
 
 .pull-request-review__draft > header h2 {
-  font-size: 14px;
+  font-size: 16px;
+  line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+.pull-request-review__draft .ui-badge {
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .pull-request-review__draft-grid {
@@ -285,12 +291,14 @@
 .pull-request-review__draft-section h3,
 .pull-request-review__checks h3,
 .pull-request-review__evidence h3 {
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .pull-request-review__draft-section > p {
   color: var(--color-text-muted);
-  font-size: 9px;
+  font-size: 11px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
@@ -318,7 +326,8 @@
 
 .pull-request-review__before-after strong {
   color: var(--color-danger);
-  font-size: 9px;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .pull-request-review__before-after > div:last-child strong {
@@ -326,7 +335,8 @@
 }
 
 .pull-request-review__before-after span {
-  font-size: 8px;
+  font-size: 10px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
@@ -352,7 +362,8 @@
 
 .pull-request-review__impacts p {
   color: var(--color-text-muted);
-  font-size: 8px;
+  font-size: 10px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
@@ -368,8 +379,9 @@
   color: var(--color-text-primary);
   cursor: pointer;
   display: flex;
-  font-size: 8px;
+  font-size: 10px;
   gap: 6px;
+  line-height: 1.5;
   min-height: 24px;
   padding: 4px 0;
   text-align: left;
@@ -402,7 +414,8 @@
 }
 
 .pull-request-review__checks ul {
-  font-size: 9px;
+  font-size: 11px;
+  line-height: 1.5;
   margin: 8px 0 0;
   padding-left: 16px;
 }
@@ -419,9 +432,10 @@
 
 .pull-request-review__evidence dl div {
   display: flex;
-  font-size: 9px;
+  font-size: 11px;
   gap: 8px;
   justify-content: space-between;
+  line-height: 1.5;
 }
 
 .pull-request-review__evidence dt {
