@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AccountSettingsScreen } from "../features/account/AccountSettingsScreen";
+import { PullRequestReviewScreen } from "../features/analysis/PullRequestReviewScreen";
 import { UiShowcase } from "../features/dev/UiShowcase";
 import { AuthScreen} from "../features/auth/AuthScreen";
 import { PasswordRecoveryScreen } from "../features/auth/PasswordRecoveryScreen";
@@ -13,8 +14,6 @@ import {
 } from "../features/workspace/RouteBoundaries";
 import { WorkspaceShell } from "../features/workspace/WorkspaceShell";
 import {
-  AnalysisReviewPlaceholder,
-  GitHubPullRequestPlaceholder,
   NotFoundScreen,
   ProjectCreateScreen,
   ProjectMemoryScreen,
@@ -92,11 +91,11 @@ export const router = createBrowserRouter([
               },
               {
                 path: "github/pulls/:pullRequestId",
-                element: <GitHubPullRequestPlaceholder />,
+                element: <PullRequestReviewScreen />,
               },
               {
                 path: "analyses/:analysisId",
-                element: <AnalysisReviewPlaceholder />,
+                element: <PullRequestReviewScreen />,
               },
               {
                 path: "records",
