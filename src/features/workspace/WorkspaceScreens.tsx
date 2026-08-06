@@ -113,19 +113,18 @@ export function ProjectSelectScreen() {
           최신 프로젝트 API 명세를 받은 뒤 연결합니다.
         </p>
         <ProjectCard
-          description="Contextory 초기 기반 검증용 프로젝트 자리입니다."
-          memberCount={4}
-          name={projectSummary.name}
-          repositoryLabel="Repository not connected"
-          status="Placeholder"
-          action={
-            <Link
-              className="ui-button ui-button--primary ui-button--sm"
-              to={`/projects/${projectSummary.id}/home`}
-            >
-              Enter project
-            </Link>
-          }
+          id="contextory-mvp"
+          icon="C"
+          name="Contextory MVP"
+          description="팀의 작업 맥락을 프로젝트 메모리로 연결합니다."
+          role="Owner"
+          plan="Team"
+          repositoryConnected
+          approvedRecords={128}
+          pendingTasks={6}
+          creditsUsed={1200}
+          creditsTotal={5000}
+          members={["Y", "H", "K"]}
         />
       </section>
       </PageContainer>

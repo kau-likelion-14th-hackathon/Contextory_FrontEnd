@@ -7,6 +7,7 @@ import { EmailVerificationScreen } from "../features/auth/EmailVerificationScree
 import { ProjectJoinScreen } from "../features/auth/ProjectJoinScreen";
 import { ProjectHomeScreen } from "../features/project/ProjectHomeScreen";
 import { GitHubWorkScreen } from "../features/github/GitHubWorkScreen";
+import { ProjectSelectScreen } from "../features/workspace/WorkspaceScreens";
 import {
   AuthBoundary,
   ProjectBoundary,
@@ -19,7 +20,6 @@ import {
   ProjectCreateScreen,
   ProjectMemoryScreen,
   ProjectRecordDetailScreen,
-  ProjectSelectScreen,
   TeamSettingsScreen,
 } from "../features/workspace/WorkspaceScreens";
 
@@ -89,14 +89,6 @@ export const router = createBrowserRouter([
               {
                 path: "github",
                 element: <GitHubWorkScreen />,
-              },
-              {
-                path: "github/pulls/:pullRequestId",
-                element: <GitHubPullRequestPlaceholder />,
-              },
-              {
-                path: "analyses/:analysisId",
-                element: <AnalysisReviewPlaceholder />,
               },
               {
                 path: "records",
