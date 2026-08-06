@@ -9,7 +9,7 @@ function isProjectJoinStatus(value: string | null): value is ProjectJoinStatus {
   return value === "invited" || value === "expired" || value === "already-joined";
 }
 
-// TODO: 초대 상세 조회 API 연결되면 token으로 실제 데이터 조회
+// 초대 상세 조회 API 연결되면 token으로 실제 데이터 조회
 const invitationMock = {
   projectId: "contextory-web",
   projectName: "Contextory Web",
@@ -28,8 +28,8 @@ export function ProjectJoinScreen() {
   const status: ProjectJoinStatus = isProjectJoinStatus(statusParam) ? statusParam : "invited";
 
   function handleAccept() {
-    // TODO: POST /api/invitations/{token}/accept 연결
-    // 로그인 안 된 상태면 로그인/회원가입으로 보내고, 완료 후 이 화면으로 복귀시키는 처리 필요
+    // POST /api/invitations/{token}/accept 연결
+    // 로그인 안 된 상태면 로그인/회원가입으로 보내고 -> 완료 후 이 화면으로 복귀시키는 처리 필요
   }
 
   return (
@@ -93,9 +93,12 @@ export function ProjectJoinScreen() {
 
         {status === "expired" ? (
           <>
-            <span aria-hidden="true" className="auth-card__icon auth-card__icon--warning">
-              !
-            </span>
+          <span aria-hidden="true" className="auth-card__icon auth-card__icon--warning">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="8" x2="12" y2="13" />
+              <line x1="12" y1="16.5" x2="12" y2="16.51" />
+            </svg>
+          </span>
             <div className="auth-card__header">
               <h1>초대 링크가 만료되었습니다</h1>
               <p>
@@ -127,7 +130,9 @@ export function ProjectJoinScreen() {
         {status === "already-joined" ? (
           <>
             <span aria-hidden="true" className="auth-card__icon auth-card__icon--success">
-              ✓
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
             </span>
             <div className="auth-card__header">
               <h1>이미 참여 중인 프로젝트예요</h1>

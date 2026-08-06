@@ -145,6 +145,10 @@ div.auth-card__header p {
   margin: 0 auto 8px;
 }
 
+.auth-card__icon svg {
+  display: block;
+}
+
 .auth-card__icon--pending {
   background: var(--color-info-soft);
   color: var(--color-info);

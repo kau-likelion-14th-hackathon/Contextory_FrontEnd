@@ -17,7 +17,7 @@ export function EmailVerificationScreen() {
     ? statusParam
     : "pending";
 
-  // TODO: 이메일 인증 API 명세 확정되면 실제 값으로 교체
+  // 이메일 인증 API 명세 확정되면 교체
   const verifiedEmail = "hong@example.com";
 
     function handlePrimaryAction() {
@@ -26,7 +26,7 @@ export function EmailVerificationScreen() {
         return;
     }
     // status === "pending" | "expired" — 둘 다 인증 메일 재발송
-    // TODO: 이메일 인증 API 명세 확정되면 실제 재발송 요청 연결
+    // 이메일 인증 API 명세 확정되면 실제 재발송 요청 연결
     }
 
   return (
@@ -50,9 +50,12 @@ export function EmailVerificationScreen() {
       <div className="auth-card auth-card--centered">
         {status === "pending" ? (
         <>
-            <span aria-hidden="true" className="auth-card__icon auth-card__icon--pending">
-            ✉
-            </span>
+          <span aria-hidden="true" className="auth-card__icon auth-card__icon--pending">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <path d="m22 7-10 5L2 7" />
+            </svg>
+          </span>
             <div className="auth-card__header">
             <h1>이메일을 확인해주세요</h1>
             <p>
@@ -80,7 +83,9 @@ export function EmailVerificationScreen() {
         {status === "success" ? (
           <>
             <span aria-hidden="true" className="auth-card__icon auth-card__icon--success">
-              ✓
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
             </span>
             <div className="auth-card__header">
               <h1>이메일 인증이 완료되었습니다</h1>
@@ -115,7 +120,10 @@ export function EmailVerificationScreen() {
         {status === "expired" ? (
           <>
             <span aria-hidden="true" className="auth-card__icon auth-card__icon--warning">
-              !
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="8" x2="12" y2="13" />
+                <line x1="12" y1="16.5" x2="12" y2="16.51" />
+              </svg>
             </span>
             <div className="auth-card__header">
               <h1>인증 링크가 만료되었습니다</h1>

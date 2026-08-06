@@ -17,7 +17,7 @@ export function PasswordRecoveryScreen({ mode }: { mode: PasswordRecoveryMode })
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-      // 지금은 화면 흐름 확인용으로 로딩 상태만 흉내냄 (실제 요청 없음)
+    // 화면 흐름 확인용으로 로딩 상태만 흉내냄 (실제 요청 없음)
     setLoading(true);
     window.setTimeout(() => setLoading(false), 800);
   }
@@ -49,7 +49,10 @@ export function PasswordRecoveryScreen({ mode }: { mode: PasswordRecoveryMode })
             </div>
             
             <span aria-hidden="true" className="auth-card__icon auth-card__icon--pending">
-              ✉
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="m22 7-10 5L2 7" />
+              </svg>
             </span>
 
             <form className="auth-card__form" onSubmit={handleSubmit}>
