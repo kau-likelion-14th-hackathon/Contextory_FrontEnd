@@ -23,7 +23,7 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    // 명세 확정되면 실제 요청으로 교체
+    // TODO: 명세 확정되면 실제 요청으로 교체
     setLoading(true);
     navigate("/projects");
   }

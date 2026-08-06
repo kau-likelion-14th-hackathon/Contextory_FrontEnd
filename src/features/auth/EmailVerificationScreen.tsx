@@ -17,7 +17,7 @@ export function EmailVerificationScreen() {
     ? statusParam
     : "pending";
 
-  // 이메일 인증 API 명세 확정되면 교체
+  // TODO: 이메일 인증 API 명세 확정되면 교체
   const verifiedEmail = "hong@example.com";
 
     function handlePrimaryAction() {
@@ -25,7 +25,7 @@ export function EmailVerificationScreen() {
         navigate("/projects");
         return;
     }
-    // status === "pending" | "expired" — 둘 다 인증 메일 재발송
+    // TODO: status === "pending" | "expired" — 둘 다 인증 메일 재발송
     // 이메일 인증 API 명세 확정되면 실제 재발송 요청 연결
     }
 

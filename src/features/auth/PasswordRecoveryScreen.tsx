@@ -12,12 +12,12 @@ export function PasswordRecoveryScreen({ mode }: { mode: PasswordRecoveryMode })
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 비밀번호 재설정 API 명세 확정되면 토큰으로 실제 이메일 조회
+  // TODO:비밀번호 재설정 API 명세 확정되면 토큰으로 실제 이메일 조회
   const verifiedEmail = "hong@example.com";
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    // 화면 흐름 확인용으로 로딩 상태만 흉내냄 (실제 요청 없음)
+    // TODO: 화면 흐름 확인용으로 로딩 상태만 흉내냄 (실제 요청 없음)
     setLoading(true);
     window.setTimeout(() => setLoading(false), 800);
   }

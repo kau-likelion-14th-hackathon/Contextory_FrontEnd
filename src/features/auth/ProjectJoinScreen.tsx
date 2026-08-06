@@ -9,7 +9,7 @@ function isProjectJoinStatus(value: string | null): value is ProjectJoinStatus {
   return value === "invited" || value === "expired" || value === "already-joined";
 }
 
-// 초대 상세 조회 API 연결되면 token으로 실제 데이터 조회
+// TODO: 초대 상세 조회 API 연결되면 token으로 실제 데이터 조회
 const invitationMock = {
   projectId: "contextory-web",
   projectName: "Contextory Web",
@@ -20,7 +20,7 @@ const invitationMock = {
 
 export function ProjectJoinScreen() {
   const { token } = useParams();
-  void token; // 초대 상세 조회 API 붙일 때 사용 예정
+  void token; // TODO:초대 상세 조회 API 붙일 때 사용 예정
 
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -29,7 +29,7 @@ export function ProjectJoinScreen() {
 
   function handleAccept() {
     // POST /api/invitations/{token}/accept 연결
-    // 로그인 안 된 상태면 로그인/회원가입으로 보내고 -> 완료 후 이 화면으로 복귀시키는 처리 필요
+    // TODO: 로그인 안 된 상태면 로그인/회원가입으로 보내고 -> 완료 후 이 화면으로 복귀시키는 처리 필요
   }
 
   return (
