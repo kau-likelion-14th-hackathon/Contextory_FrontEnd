@@ -1,38 +1,122 @@
 .auth-layout-shell {
-  align-items: center;
   display: grid;
-  gap: 32px;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
+  grid-template-columns: 1fr 1fr;
   min-height: 100vh;
-  padding: 48px;
 }
 
 .auth-layout-shell__brand {
-  max-width: 720px;
+  background: var(--color-surface-subtle);
+  padding: 64px 64px 32px 64px;
+  display: flex;
+  flex-direction: column;
+
 }
 
-.auth-layout-shell__brand h1 {
-  font-size: 48px;
-  line-height: 1.08;
-  margin: 8px 0 12px;
+
+
+.auth-layout-shell__brand-content {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  margin-bottom: auto;
 }
 
-.auth-layout-shell__brand .eyebrow::after {
-  content: " · 프로젝트 메모리";
-  color: var(--color-text-muted);
+.auth-layout-shell__brand-logo {
+  color: var(--color-primary);
+  font-size: 28px;
   font-weight: 700;
+  margin: 0;
 }
 
-.auth-layout-shell__brand p:last-child {
+.auth-layout-shell__brand-headers h1 {
+  display: flex;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.08;
+  margin: 0;
+}
+
+.auth-layout-shell__brand-description {
   color: var(--color-text-secondary);
   font-size: 17px;
+  margin-bottom: 60px;
+  line-height: 1.5;
+}
+
+.auth-layout-shell__features {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 50px;
+}
+
+.auth-layout-shell__features li {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.auth-layout-shell__feature-icon {
+  width: 55px;
+  height: 55px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-selected);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 25px;
+  color: var(--color-primary);
+}
+
+.auth-layout-shell__brand li div strong {
+  color: #132019;
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 5px;
+  display: block;
+}
+
+.auth-layout-shell__brand li div p {
+  color: #65736C;
+  font-size: 14px;
+  font-weight: 400;
+  margin: 0;
+}
+
+.auth-layout-shell__brand-copyright {
+  color: var(--color-primary);
+  font-size: 12px;
+  margin-top: 28px;
 }
 
 .auth-layout-shell__form {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-card,
+.content-section {
+  display: grid;
+  gap: 16px;
+}
+
+.auth-card {
+  width: 470px;
+  max-width: 100%;
+  max-height: 812px;
+  display: grid;
+  gap: 14px;
+  align-content: safe center;
+  overflow-y: auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 20px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 28px 30px;
 }
 
 @media (max-width: 1199px) {
@@ -49,13 +133,5 @@
     padding: 16px;
   }
 
-  .auth-layout-shell__brand h1 {
-    font-size: 24px;
-    line-height: 1.2;
-    margin-bottom: 8px;
-  }
 
-  .auth-layout-shell__brand p:last-child {
-    font-size: 14px;
-  }
 }
