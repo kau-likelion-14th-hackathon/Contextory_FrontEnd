@@ -148,22 +148,6 @@ export function ProjectCreateScreen() {
   );
 }
 
-export function ProjectMemoryScreen() {
-  return (
-    <main>
-      <PageContainer>
-      <section className="content-section">
-        <h1>Project Memory</h1>
-        <EmptyState
-          title="No project memory records"
-          description="AI 분석 초안이 사람의 검토와 관리자 승인을 거친 뒤 공식 기록으로 노출됩니다."
-        />
-      </section>
-      </PageContainer>
-    </main>
-  );
-}
-
 export function ProjectRecordDetailScreen() {
   const { recordId } = useParams();
 

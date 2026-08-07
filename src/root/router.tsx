@@ -8,7 +8,7 @@ import { EmailVerificationScreen } from "../features/auth/EmailVerificationScree
 import { ProjectJoinScreen } from "../features/auth/ProjectJoinScreen";
 import { ProjectHomeScreen } from "../features/project/ProjectHomeScreen";
 import { GitHubWorkScreen } from "../features/github/GitHubWorkScreen";
-import { ProjectSelectScreen } from "../features/workspace/WorkspaceScreens";
+import { ProjectMemoryScreen } from "../features/memory/ProjectMemoryScreen";
 import {
   AuthBoundary,
   ProjectBoundary,
@@ -17,7 +17,6 @@ import { WorkspaceShell } from "../features/workspace/WorkspaceShell";
 import {
   NotFoundScreen,
   ProjectCreateScreen,
-  ProjectMemoryScreen,
   ProjectRecordDetailScreen,
   TeamSettingsScreen,
 } from "../features/workspace/WorkspaceScreens";
@@ -60,7 +59,7 @@ export const router = createBrowserRouter([
     children: [
       {
         path: "/projects",
-        element: <ProjectSelectScreen />,
+        element: <ProjectMemoryScreen />,
       },
       {
         path: "/projects/new",
