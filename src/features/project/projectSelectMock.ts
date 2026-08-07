@@ -1,4 +1,3 @@
-// features/project/projectSelectMock.ts
 export type ProjectSelectViewState = "success" | "empty";
 export const DEFAULT_PROJECT_SELECT_STATE: ProjectSelectViewState = "success";
 

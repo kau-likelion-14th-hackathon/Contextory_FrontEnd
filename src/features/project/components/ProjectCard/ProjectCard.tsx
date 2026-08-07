@@ -1,4 +1,3 @@
-// features/project/components/ProjectCard/ProjectCard.tsx
 import { Link } from "react-router-dom";
 import { Badge } from "../../../../shared/ui";
 import "./ProjectCard.css";

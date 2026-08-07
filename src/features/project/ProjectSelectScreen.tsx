@@ -2,6 +2,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { PageContainer, ResponsiveGrid } from "../../shared/layouts";
 import { Button, EmptyState, SearchInput } from "../../shared/ui";
+import { TopBar } from "../workspace/components/TopBar";
 import { ProjectCard } from "./components";
 import {
   DEFAULT_PROJECT_SELECT_STATE,
@@ -24,14 +25,8 @@ export function ProjectSelectScreen() {
 
   return (
     <main className="project-select">
-      <header className="project-select__topbar">
-        <span className="project-select__logo">Contextory</span>
-        <div className="project-select__user">
-          <span aria-hidden="true" className="project-select__avatar" />
-          {/* TODO: 계정 API 명세 확정되면 실제 로그인 사용자 이름으로 교체 */}
-          <span>홍길동</span>
-        </div>
-      </header>
+      {/* TODO: 실제 로그인 사용자 이름으로 교체 */}
+      <TopBar title="내 프로젝트" user="홍길동" />
 
       <PageContainer size="full">
         <div className="project-select__content">

@@ -1,36 +1,6 @@
 .project-select {
   min-height: 100vh;
-  background: var(--color-background);
-}
-
-.project-select__topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px var(--space-page-desktop);
-  border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
-}
-
-.project-select__logo {
-  color: var(--color-primary);
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.project-select__user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.project-select__avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--color-disabled);
 }
 
 .project-select__content {
@@ -80,21 +50,39 @@
 
 .project-select .feedback-state {
   min-height: 440px;
-  max-width: 380px;
-  margin: 0 auto;
+  width: 100%;
   text-align: center;
   align-items: center;
+  justify-items: center;
+  gap: 24px;
+}
+
+.project-select .feedback-state__copy {
+  max-width: none;
 }
 
 .project-select .feedback-state h2 {
   color: var(--color-primary);
 }
 
-/* 동그라미 안에 작은 고리 아이콘 */
+.project-select .feedback-state__label {
+  display: none;
+}
+
+.project-select .feedback-state__icon {
+  width: auto;
+  height: auto;
+  background: none;
+}
+
+.project-select .feedback-state__actions {
+  justify-content: center;
+}
+
 .project-select__empty-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
+  width: 96px;
+  height: 56px;
+  border-radius: 999px;
   background: var(--color-primary-soft);
   display: flex;
   align-items: center;
@@ -120,11 +108,10 @@
 .project-select__content {
   max-width: 1440px;
   margin: 0 auto;
-  padding: 20px var(--space-page-desktop) 32px;  /* 기존 padding 값 그대로 유지 */
+  padding: 20px var(--space-page-desktop) 32px;  
 }
 
 @media (max-width: 767px) {
-  .project-select__topbar,
   .project-select__content {
     padding-left: var(--space-page-mobile);
     padding-right: var(--space-page-mobile);
