@@ -1,0 +1,655 @@
+.team-project-settings {
+  min-width: 0;
+  width: 100%;
+}
+
+.team-project-settings__content {
+  display: grid;
+  gap: 16px;
+  margin-inline: auto;
+  max-width: 1192px;
+  min-width: 0;
+  width: 100%;
+}
+
+.team-project-settings__header {
+  align-items: center;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.team-project-settings__header h1,
+.team-project-settings__header p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.team-project-settings__header h1 {
+  font-size: 26px;
+  line-height: 1.4;
+}
+
+.team-project-settings__feedback {
+  color: var(--color-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: right;
+}
+
+.team-project-settings__feedback:empty {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.team-project-settings__tabs .tabs {
+  border: 0;
+  display: flex;
+  gap: 28px;
+  overflow: visible;
+}
+
+.team-project-settings__tabs .tabs__tab {
+  border: 0;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 42px;
+  padding-inline: 18px;
+  width: 150px;
+}
+
+.team-project-settings__tabs .tabs__tab--active {
+  background: var(--color-surface-selected);
+  color: var(--color-primary);
+}
+
+.team-project-settings__tabs .tabs__tab:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  opacity: 0.72;
+}
+
+.team-project-settings__two-column {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.97fr) minmax(300px, 1fr);
+  min-width: 0;
+}
+
+.team-project-settings__side-column {
+  align-content: start;
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.settings-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+  padding: 20px;
+}
+
+.settings-card h2,
+.settings-card h3,
+.settings-card p,
+.settings-card dl,
+.settings-card dd {
+  margin: 0;
+}
+
+.settings-card h2,
+.settings-card-heading h2,
+.settings-repository-scope h2 {
+  color: var(--color-primary);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.settings-card-heading {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-card-heading h2,
+.settings-card-heading p {
+  margin: 0;
+}
+
+.settings-card-heading p,
+.settings-danger-zone p,
+.settings-github-account p,
+.settings-repository > p {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.settings-project-form,
+.settings-github-main {
+  align-content: start;
+  display: grid;
+  gap: 16px;
+  min-height: 638px;
+}
+
+.settings-project-form .form-field {
+  gap: 8px;
+}
+
+.settings-project-form .form-field__label {
+  font-size: 12px;
+}
+
+.settings-project-form .ui-input {
+  min-height: 48px;
+}
+
+.settings-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+
+.settings-actions--end {
+  justify-content: flex-end;
+}
+
+.settings-metadata {
+  min-height: 250px;
+}
+
+.settings-metadata dl,
+.settings-sync-status dl,
+.settings-repository dl {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.settings-metadata dl > div,
+.settings-sync-status dl > div,
+.settings-repository dl > div {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.settings-metadata dt,
+.settings-sync-status dt,
+.settings-repository dt {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.settings-metadata dd,
+.settings-sync-status dd,
+.settings-repository dd {
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+  max-width: 70%;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.settings-danger-zone {
+  border-color: var(--color-danger);
+  display: grid;
+  gap: 12px;
+  min-height: 220px;
+}
+
+.settings-danger-zone h2,
+.settings-danger-zone h3 {
+  color: var(--color-danger);
+}
+
+.settings-danger-zone h2 {
+  font-size: 15px;
+}
+
+.settings-danger-zone h3 {
+  font-size: 13px;
+}
+
+.settings-danger-zone .ui-button {
+  margin-top: auto;
+}
+
+.settings-delete-dialog {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-delete-dialog label {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.settings-github-account {
+  align-items: center;
+  background: var(--color-surface-subtle);
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 14px;
+}
+
+.settings-github-mark {
+  align-items: center;
+  background: #132019;
+  border-radius: 10px;
+  color: white;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 800;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.settings-github-account > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settings-github-account strong,
+.settings-repository h3 {
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.settings-github-account .ui-badge,
+.settings-sync-status .ui-badge,
+.settings-members-table .ui-badge {
+  white-space: nowrap;
+  width: max-content;
+}
+
+.settings-repository {
+  background: var(--color-surface-subtle);
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.settings-sync-status {
+  align-content: start;
+  display: grid;
+  gap: 12px;
+  min-height: 220px;
+}
+
+.settings-sync-status dl {
+  margin-top: 0;
+}
+
+.settings-sync-status .ui-button {
+  margin-top: auto;
+}
+
+.settings-repository-scope {
+  background: var(--color-surface-selected);
+  border-radius: 10px;
+  min-height: 240px;
+  padding: 20px;
+}
+
+.settings-repository-scope h2,
+.settings-repository-scope ul {
+  margin: 0;
+}
+
+.settings-repository-scope ul {
+  color: var(--color-text-secondary);
+  display: grid;
+  font-size: 12px;
+  gap: 8px;
+  line-height: 1.5;
+  margin-top: 12px;
+  padding-left: 18px;
+}
+
+.settings-members-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.settings-members-banner {
+  align-items: center;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 14px;
+}
+
+.settings-members-banner__icon {
+  color: var(--color-primary);
+  flex: 0 0 auto;
+}
+
+.settings-members-banner p {
+  color: var(--color-text-secondary);
+  flex: 1 1 auto;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-members-banner strong {
+  flex: 0 0 auto;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.settings-members-table-wrap {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.settings-members-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.settings-members-table th,
+.settings-members-table td {
+  border-bottom: 1px solid var(--color-border);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.settings-members-table thead th {
+  background: #f7f9f8;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  height: 48px;
+}
+
+.settings-members-table tbody th,
+.settings-members-table tbody td {
+  color: var(--color-text-secondary);
+  height: 64px;
+}
+
+.settings-members-table tbody th {
+  align-items: center;
+  color: var(--color-text-primary);
+  display: flex;
+  font-weight: 600;
+  gap: 10px;
+}
+
+.settings-members-table tr:last-child th,
+.settings-members-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.settings-members-table th:nth-child(1) { width: 21%; }
+.settings-members-table th:nth-child(2) { width: 25%; }
+.settings-members-table th:nth-child(3) { width: 15%; }
+.settings-members-table th:nth-child(4) { width: 26%; }
+.settings-members-table th:nth-child(5) { width: 13%; }
+
+.settings-member-avatar {
+  align-items: center;
+  background: #dcebe4;
+  border-radius: 50%;
+  color: var(--color-primary);
+  display: inline-flex;
+  flex: 0 0 28px;
+  font-size: 11px;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.settings-member-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-member-actions .ui-button {
+  min-width: 40px;
+}
+
+@media (max-width: 1199px) {
+  .team-project-settings__two-column {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-project-form,
+  .settings-github-main {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .team-project-settings__tabs .tabs {
+    gap: 8px;
+  }
+
+  .team-project-settings__tabs .tabs__tab {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+  }
+
+  .settings-members-banner {
+    flex-wrap: wrap;
+  }
+
+  .settings-members-banner p {
+    flex-basis: calc(100% - 32px);
+  }
+
+  .settings-members-table-wrap {
+    border: 0;
+    overflow: visible;
+  }
+
+  .settings-members-table,
+  .settings-members-table tbody {
+    display: block;
+  }
+
+  .settings-members-table thead {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+
+  .settings-members-table tbody {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-members-table tbody tr {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    display: grid;
+    min-width: 0;
+    padding: 14px;
+  }
+
+  .settings-members-table tbody th,
+  .settings-members-table tbody td {
+    align-items: center;
+    border: 0;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 92px minmax(0, 1fr);
+    height: auto;
+    min-width: 0;
+    padding: 7px 0;
+    width: auto;
+  }
+
+  .settings-members-table tbody th {
+    grid-template-columns: 92px 28px minmax(0, 1fr);
+  }
+
+  .settings-members-table tbody th::before,
+  .settings-members-table tbody td::before {
+    color: var(--color-text-muted);
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 600;
+  }
+}
+
+@media (max-width: 767px) {
+  .team-project-settings__content {
+    gap: 14px;
+  }
+
+  .team-project-settings__header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .team-project-settings__header h1 {
+    font-size: 24px;
+  }
+
+  .team-project-settings__feedback {
+    text-align: left;
+  }
+
+  .team-project-settings__tabs .tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .team-project-settings__tabs .tabs__tab {
+    min-height: 44px;
+    padding-inline: 8px;
+    width: 100%;
+  }
+
+  .settings-card {
+    padding: 16px;
+  }
+
+  .settings-actions,
+  .settings-actions .ui-button {
+    width: 100%;
+  }
+
+  .settings-actions {
+    display: grid;
+  }
+
+  .settings-actions .ui-button {
+    min-height: 44px;
+  }
+
+  .settings-github-account {
+    align-items: start;
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .settings-github-account .ui-badge {
+    grid-column: 2;
+  }
+
+  .settings-metadata dl > div,
+  .settings-sync-status dl > div,
+  .settings-repository dl > div {
+    align-items: start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .settings-metadata dd,
+  .settings-sync-status dd,
+  .settings-repository dd {
+    max-width: 100%;
+    text-align: left;
+  }
+
+  .settings-members-banner {
+    align-items: stretch;
+  }
+
+  .settings-members-banner strong {
+    align-self: center;
+    flex: 1 1 auto;
+  }
+
+  .settings-members-banner .ui-button {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .settings-members-table tbody {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-members-table tbody th,
+  .settings-members-table tbody td {
+    grid-template-columns: 82px minmax(0, 1fr);
+  }
+
+  .settings-members-table tbody th {
+    grid-template-columns: 82px 28px minmax(0, 1fr);
+  }
+
+  .settings-member-actions {
+    flex-wrap: wrap;
+  }
+
+  .settings-member-actions .ui-button {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .team-project-settings *,
+  .settings-delete-dialog * {
+    scroll-behavior: auto;
+    transition: none;
+  }
+}
