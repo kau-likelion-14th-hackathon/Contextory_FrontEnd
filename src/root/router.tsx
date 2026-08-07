@@ -8,6 +8,7 @@ import { EmailVerificationScreen } from "../features/auth/EmailVerificationScree
 import { ProjectJoinScreen } from "../features/auth/ProjectJoinScreen";
 import { ProjectHomeScreen } from "../features/project/ProjectHomeScreen";
 import { GitHubWorkScreen } from "../features/github/GitHubWorkScreen";
+import { ProjectMemoryScreen } from "../features/memory/ProjectMemoryScreen";
 import {
   AuthBoundary,
   ProjectBoundary,
@@ -16,7 +17,6 @@ import { WorkspaceShell } from "../features/workspace/WorkspaceShell";
 import {
   NotFoundScreen,
   ProjectCreateScreen,
-  ProjectMemoryScreen,
   ProjectRecordDetailScreen,
   ProjectSelectScreen,
   TeamSettingsScreen,
