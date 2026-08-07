@@ -1,65 +1,64 @@
 import { Link, useParams } from "react-router-dom";
-import { ProjectCard } from "../project/components";
-import { AuthLayout, PageContainer, SettingsLayout } from "../../shared/layouts";
+import { PageContainer, SettingsLayout } from "../../shared/layouts";
 import {
   EmptyState,
 } from "../../shared/components/AppState";
 import { projectSummary } from "../projects/projectSummary";
 
-type AuthMode = "login" | "signup" | "forgot-password";
+// type AuthMode = "login" | "signup" | "forgot-password";
 
-export function SimpleAuthScreen({ mode }: { mode: AuthMode }) {
-  const copy = {
-    login: {
-      title: "Login",
-      body: "이메일 로그인 API 명세가 확정되면 실제 입력, 검증, 세션 복원 흐름을 연결합니다.",
-      action: "Continue to projects",
-    },
-    signup: {
-      title: "Sign up",
-      body: "회원가입 필드와 약관 정책은 최신 인증 명세를 기준으로 연결합니다.",
-      action: "Create placeholder account",
-    },
-    "forgot-password": {
-      title: "Forgot password",
-      body: "비밀번호 재설정 요청 API가 확정되면 이메일 발송 흐름을 연결합니다.",
-      action: "Back to login",
-    },
-  }[mode];
+// export function SimpleAuthScreen({ mode }: { mode: AuthMode }) {
+//   const copy = {
+//     login: {
+//       title: "Login",
+//       body: "이메일 로그인 API 명세가 확정되면 실제 입력, 검증, 세션 복원 흐름을 연결합니다.",
+//       action: "Continue to projects",
+//     },
+//     signup: {
+//       title: "Sign up",
+//       body: "회원가입 필드와 약관 정책은 최신 인증 명세를 기준으로 연결합니다.",
+//       action: "Create placeholder account",
+//     },
+//     "forgot-password": {
+//       title: "Forgot password",
+//       body: "비밀번호 재설정 요청 API가 확정되면 이메일 발송 흐름을 연결합니다.",
+//       action: "Back to login",
+//     },
+//   }[mode];
 
-  return (
-    <AuthLayout
-      title={
-        <span style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-          <span style={{ color: "#132019" }}>프로젝트의 맥락을 이해하고,</span>
-          <span style={{ color: "#0D7A55" }}>더 나은 협업을 만들어가세요</span>
-        </span>
-      }
-      description="{
-        <span>
-          GitHub 변경을 수집하고 AI가 분석한 맥락을<br/>
-          검토·승인하여 팀의 프로젝트 메모리로 남깁니다.
-        </span>
-      }"
-    >
-      <div className="auth-card" aria-label={copy.title}>
-        <h2>{copy.title}</h2>
-        <p>{copy.body}</p>
-        <Link
-          className="ui-button ui-button--primary ui-button--md"
-          to={mode === "forgot-password" ? "/auth/login" : "/projects"}
-        >
-          {copy.action}
-        </Link>
-        <div className="inline-link-group">
-          <Link to="/auth/login">Login</Link>
-          <Link to="/auth/signup">Sign up</Link>
-          <Link to="/auth/forgot-password">Forgot password</Link>
-        </div>
-      </div>
-    </AuthLayout>
-  );
-}
+//   return (
+//     <AuthLayout
+//       title={
+//         <span style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+//           <span style={{ color: "#132019" }}>프로젝트의 맥락을 이해하고,</span>
+//           <span style={{ color: "#0D7A55" }}>더 나은 협업을 만들어가세요</span>
+//         </span>
+//       }
+//       description="{
+//         <span>
+//           GitHub 변경을 수집하고 AI가 분석한 맥락을<br/>
+//           검토·승인하여 팀의 프로젝트 메모리로 남깁니다.
+//         </span>
+//       }"
+//     >
+//       <div className="auth-card" aria-label={copy.title}>
+//         <h2>{copy.title}</h2>
+//         <p>{copy.body}</p>
+//         <Link
+//           className="ui-button ui-button--primary ui-button--md"
+//           to={mode === "forgot-password" ? "/auth/login" : "/projects"}
+//         >
+//           {copy.action}
+//         </Link>
+//         <div className="inline-link-group">
+//           <Link to="/auth/login">Login</Link>
+//           <Link to="/auth/signup">Sign up</Link>
+//           <Link to="/auth/forgot-password">Forgot password</Link>
+//         </div>
+//       </div>
+//     </AuthLayout>
+//   );
+// }
 
 /*
 export function ResetPasswordScreen() {
@@ -101,36 +100,36 @@ export function ResetPasswordScreen() {
 //   );
 // }
 
-export function ProjectSelectScreen() {
-  return (
-    <main>
-      <PageContainer>
-      <section className="content-section">
-        <p className="eyebrow">Projects</p>
-        <h1>Project Select</h1>
-        <p className="text-muted">
-          로그인 이후 프로젝트 선택 전 영역입니다. 프로젝트 목록과 생성 흐름은
-          최신 프로젝트 API 명세를 받은 뒤 연결합니다.
-        </p>
-        <ProjectCard
-          id="contextory-mvp"
-          icon="C"
-          name="Contextory MVP"
-          description="팀의 작업 맥락을 프로젝트 메모리로 연결합니다."
-          role="Owner"
-          plan="Team"
-          repositoryConnected
-          approvedRecords={128}
-          pendingTasks={6}
-          creditsUsed={1200}
-          creditsTotal={5000}
-          members={["Y", "H", "K"]}
-        />
-      </section>
-      </PageContainer>
-    </main>
-  );
-}
+// export function ProjectSelectScreen() {
+//   return (
+//     <main>
+//       <PageContainer>
+//       <section className="content-section">
+//         <p className="eyebrow">Projects</p>
+//         <h1>Project Select</h1>
+//         <p className="text-muted">
+//           로그인 이후 프로젝트 선택 전 영역입니다. 프로젝트 목록과 생성 흐름은
+//           최신 프로젝트 API 명세를 받은 뒤 연결합니다.
+//         </p>
+//         <ProjectCard
+//           id="contextory-mvp"
+//           icon="C"
+//           name="Contextory MVP"
+//           description="팀의 작업 맥락을 프로젝트 메모리로 연결합니다."
+//           role="Owner"
+//           plan="Team"
+//           repositoryConnected
+//           approvedRecords={128}
+//           pendingTasks={6}
+//           creditsUsed={1200}
+//           creditsTotal={5000}
+//           members={["Y", "H", "K"]}
+//         />
+//       </section>
+//       </PageContainer>
+//     </main>
+//   );
+// }
 
 export function ProjectCreateScreen() {
   return (

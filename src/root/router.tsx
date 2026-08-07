@@ -8,6 +8,7 @@ import { EmailVerificationScreen } from "../features/auth/EmailVerificationScree
 import { ProjectJoinScreen } from "../features/auth/ProjectJoinScreen";
 import { ProjectHomeScreen } from "../features/project/ProjectHomeScreen";
 import { GitHubWorkScreen } from "../features/github/GitHubWorkScreen";
+import { ProjectSelectScreen } from "../features/project/ProjectSelectScreen";
 import { ProjectMemoryScreen } from "../features/memory/ProjectMemoryScreen";
 import {
   AuthBoundary,
@@ -59,7 +60,7 @@ export const router = createBrowserRouter([
     children: [
       {
         path: "/projects",
-        element: <ProjectMemoryScreen />,
+        element: <ProjectSelectScreen />, // 빈 프로젝트 화면, 내 프로젝트 화면
       },
       {
         path: "/projects/new",
