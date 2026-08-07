@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { PageContainer, SettingsLayout } from "../../shared/layouts";
 import {
   EmptyState,
@@ -143,7 +143,7 @@ export function ProjectCreateScreen() {
         />
       </section>
       </PageContainer>
-    </main>
+    </main> 
   );
 }
 
