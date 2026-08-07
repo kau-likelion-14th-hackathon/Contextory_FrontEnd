@@ -148,42 +148,6 @@ export function ProjectCreateScreen() {
   );
 }
 
-export function GitHubPullRequestPlaceholder() {
-  const { pullRequestId } = useParams();
-
-  return (
-    <main>
-      <PageContainer>
-      <section className="content-section">
-        <h1>Pull request review</h1>
-        <p className="text-muted">
-          PR `{pullRequestId}`의 diff와 AI 분석 비교 화면은 API 명세 확정 후
-          연결합니다.
-        </p>
-      </section>
-      </PageContainer>
-    </main>
-  );
-}
-
-export function AnalysisReviewPlaceholder() {
-  const { analysisId } = useParams();
-
-  return (
-    <main>
-      <PageContainer>
-      <section className="content-section">
-        <h1>Analysis review</h1>
-        <p className="text-muted">
-          분석 `{analysisId}`의 검토, 수정, 승인 요청 흐름은 API 명세 확정 후
-          연결합니다.
-        </p>
-      </section>
-      </PageContainer>
-    </main>
-  );
-}
-
 export function ProjectMemoryScreen() {
   return (
     <main>
