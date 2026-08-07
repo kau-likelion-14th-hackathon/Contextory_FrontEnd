@@ -52,6 +52,9 @@ export function Tabs({ tabs, activeTab, onChange, ariaLabel }: TabsProps) {
     }
 
     onChange(enabledTabs[nextIndex].id);
+    const enabledTabButtons = event.currentTarget.parentElement
+      ?.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)');
+    enabledTabButtons?.[nextIndex]?.focus();
   }
 
   return (
@@ -65,6 +68,7 @@ export function Tabs({ tabs, activeTab, onChange, ariaLabel }: TabsProps) {
           onKeyDown={(event) => handleKeyDown(event, tab.id)}
           onClick={() => onChange(tab.id)}
           role="tab"
+          tabIndex={activeTab === tab.id ? 0 : -1}
           type="button"
         >
           {tab.label}
