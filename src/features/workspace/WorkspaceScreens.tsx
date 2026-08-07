@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ProjectCard } from "../project/components";
 import { AuthLayout, PageContainer, SettingsLayout } from "../../shared/layouts";
 import {
@@ -143,24 +143,6 @@ export function ProjectCreateScreen() {
           title="Project creation is not connected"
           description="프로젝트 이름, 목적, 주요 기능, 팀 역할 입력은 백엔드 명세 확정 후 연결합니다."
         />
-      </section>
-      </PageContainer>
-    </main>
-  );
-}
-
-export function ProjectRecordDetailScreen() {
-  const { recordId } = useParams();
-
-  return (
-    <main>
-      <PageContainer>
-      <section className="content-section">
-        <h1>Project record</h1>
-        <p className="text-muted">
-          기록 `{recordId}` 상세의 작업 목적, 변경 이유, 역할별 영향, 근거는
-          프로젝트 메모리 API 명세 확정 후 연결합니다.
-        </p>
       </section>
       </PageContainer>
     </main>
