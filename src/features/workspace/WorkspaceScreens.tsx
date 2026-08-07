@@ -147,24 +147,6 @@ export function ProjectCreateScreen() {
   );
 }
 
-export function ProjectRecordDetailScreen() {
-  const { recordId } = useParams();
-
-  return (
-    <main>
-      <PageContainer>
-      <section className="content-section">
-        <h1>Project record</h1>
-        <p className="text-muted">
-          기록 `{recordId}` 상세의 작업 목적, 변경 이유, 역할별 영향, 근거는
-          프로젝트 메모리 API 명세 확정 후 연결합니다.
-        </p>
-      </section>
-      </PageContainer>
-    </main>
-  );
-}
-
 export function TeamSettingsScreen() {
   return (
     <main>

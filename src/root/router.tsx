@@ -9,6 +9,7 @@ import { ProjectJoinScreen } from "../features/auth/ProjectJoinScreen";
 import { ProjectHomeScreen } from "../features/project/ProjectHomeScreen";
 import { GitHubWorkScreen } from "../features/github/GitHubWorkScreen";
 import { ProjectSelectScreen } from "../features/project/ProjectSelectScreen";
+import { ProjectMemoryDetailScreen } from "../features/memory/ProjectMemoryDetailScreen";
 import { ProjectMemoryScreen } from "../features/memory/ProjectMemoryScreen";
 import {
   AuthBoundary,
@@ -18,7 +19,6 @@ import { WorkspaceShell } from "../features/workspace/WorkspaceShell";
 import {
   NotFoundScreen,
   ProjectCreateScreen,
-  ProjectRecordDetailScreen,
   TeamSettingsScreen,
 } from "../features/workspace/WorkspaceScreens";
 
@@ -103,7 +103,7 @@ export const router = createBrowserRouter([
               },
               {
                 path: "records/:recordId",
-                element: <ProjectRecordDetailScreen />,
+                element: <ProjectMemoryDetailScreen />,
               },
               {
                 path: "settings",
