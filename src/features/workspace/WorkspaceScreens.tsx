@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { ProjectCard } from "../project/components";
-import { AuthLayout, PageContainer, SettingsLayout } from "../../shared/layouts";
+import { AuthLayout, PageContainer } from "../../shared/layouts";
 import {
   EmptyState,
 } from "../../shared/components/AppState";
@@ -144,39 +144,6 @@ export function ProjectCreateScreen() {
           description="프로젝트 이름, 목적, 주요 기능, 팀 역할 입력은 백엔드 명세 확정 후 연결합니다."
         />
       </section>
-      </PageContainer>
-    </main>
-  );
-}
-
-export function TeamSettingsScreen() {
-  return (
-    <main>
-      <PageContainer>
-      <SettingsLayout
-        title="Team & Settings"
-        description="프로젝트 설정과 팀 관리를 분리해서 표시합니다."
-        navItems={[
-          { label: "Project", active: true },
-          { label: "Members" },
-          { label: "Billing" },
-        ]}
-      >
-        <dl className="definition-list-panel">
-          <div>
-            <dt>Project role</dt>
-            <dd>{projectSummary.role}</dd>
-          </div>
-          <div>
-            <dt>Repository</dt>
-            <dd>Not connected</dd>
-          </div>
-          <div>
-            <dt>Approval policy</dt>
-            <dd>Requires manager approval</dd>
-          </div>
-        </dl>
-      </SettingsLayout>
       </PageContainer>
     </main>
   );
