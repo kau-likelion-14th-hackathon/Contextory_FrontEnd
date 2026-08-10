@@ -1,14 +1,25 @@
 import "./TopBar.css";
+import { ProfileMenu } from "./ProfileMenu";
 
 export type TopBarProps = {
-  title: string;
+  title?: string;
   subtitle?: string;
   user?: string;
+  userEmail?: string;
   actions?: React.ReactNode;
   onMenuClick?: () => void;
+  onProfileFeedback?: (message: string) => void;
 };
 
-export function TopBar({ title, subtitle, user, actions, onMenuClick }: TopBarProps) {
+export function TopBar({
+  title,
+  subtitle,
+  user,
+  userEmail = "hong@example.com",
+  actions,
+  onMenuClick,
+  onProfileFeedback,
+}: TopBarProps) {
   return (
     <header className="top-bar">
       <div className="top-bar__leading">
@@ -24,14 +35,16 @@ export function TopBar({ title, subtitle, user, actions, onMenuClick }: TopBarPr
         ) : null}
         <div>
           <p className="eyebrow">Contextory</p>
-          <h1>{title}</h1>
+          {title ? <h1>{title}</h1> : null}
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
       </div>
       {actions || user ? (
         <div className="top-bar__actions">
           {actions}
-          {user ? <strong className="top-bar__user">{user}</strong> : null}
+          {user ? (
+            <ProfileMenu email={userEmail} name={user} onFeedback={onProfileFeedback} />
+          ) : null}
         </div>
       ) : null}
     </header>
