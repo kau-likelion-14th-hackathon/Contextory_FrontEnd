@@ -9,6 +9,7 @@ export type ProjectSummaryCard = {
   role: string;
   plan: "Free" | "Starter" | "Team";
   repositoryConnected: boolean;
+  repository?: string;
   approvedRecords: number;
   pendingTasks: number;
   creditsUsed?: number;
@@ -25,6 +26,7 @@ export const projectSelectMock: ProjectSummaryCard[] = [
     role: "프로젝트 관리자",
     plan: "Starter",
     repositoryConnected: true,
+    repository: "team/contextory-web",
     approvedRecords: 1248,
     pendingTasks: 18,
     creditsUsed: 2340,
@@ -39,6 +41,7 @@ export const projectSelectMock: ProjectSummaryCard[] = [
     role: "백엔드 개발자",
     plan: "Team",
     repositoryConnected: true,
+    repository: "team/contextory-api",
     approvedRecords: 3521,
     pendingTasks: 42,
     creditsUsed: 12450,

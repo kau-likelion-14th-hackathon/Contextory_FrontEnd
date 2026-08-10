@@ -6,7 +6,9 @@
 .project-select__content {
   display: grid;
   gap: 24px;
-  padding: 32px var(--space-page-desktop) 64px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 20px var(--space-page-desktop) 32px;
 }
 
 .project-select__heading {
@@ -18,7 +20,7 @@
   width: 100%;
 }
 
-.project-select__heading h1 {
+.project-select__heading h2 {
   font-size: 28px;
   margin: 0 0 4px;
 }
@@ -103,12 +105,6 @@
 .project-select .page-container--full {
   margin-top: 0;
   margin-bottom: 0;
-}
-
-.project-select__content {
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: 20px var(--space-page-desktop) 32px;  
 }
 
 @media (max-width: 767px) {

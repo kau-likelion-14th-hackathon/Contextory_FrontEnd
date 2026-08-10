@@ -47,14 +47,20 @@ export function ProjectCard({
         <div><span>승인된 기록</span><strong>{approvedRecords.toLocaleString()}</strong></div>
         <div><span>대기 중 작업</span><strong>{pendingTasks}</strong></div>
         <div>
-          <span>잔여 크레딧</span>
-          <strong>{creditsTotal ? `${creditsUsed?.toLocaleString()} / ${creditsTotal.toLocaleString()}` : "—"}</strong>
+          <span>크레딧 사용량</span>
+          <strong>
+            {creditsUsed !== undefined && creditsTotal !== undefined
+              ? `${creditsUsed.toLocaleString()} / ${creditsTotal.toLocaleString()}`
+              : "—"}
+          </strong>
         </div>
       </div>
 
       <div aria-label="프로젝트 멤버" className="project-card__members">
         <span>멤버</span>
-        {members.map((initial) => <span className="project-card__avatar" key={initial}>{initial}</span>)}
+        {members.map((initial, index) => (
+          <span className="project-card__avatar" key={`${initial}-${index}`}>{initial}</span>
+        ))}
       </div>
 
       <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${id}/home`}>

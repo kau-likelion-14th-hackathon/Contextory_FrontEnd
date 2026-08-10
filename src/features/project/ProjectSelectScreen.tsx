@@ -32,7 +32,7 @@ export function ProjectSelectScreen() {
         <div className="project-select__content">
           <div className="project-select__heading">
             <div>
-              <h1>내 프로젝트</h1>
+              <h2>내 프로젝트</h2>
               <p>참여 중인 프로젝트를 선택하거나 새 프로젝트를 생성하세요.</p>
             </div>
             <Link className="ui-button ui-button--primary ui-button--md" to="/projects/new">
@@ -41,10 +41,14 @@ export function ProjectSelectScreen() {
           </div>
 
           <div className="project-select__toolbar">
-            <SearchInput aria-label="프로젝트 검색" placeholder="프로젝트 검색" />
+            <SearchInput
+              aria-label="프로젝트 검색 (준비 중)"
+              disabled
+              placeholder="프로젝트 검색 (준비 중)"
+            />
             <div className="project-select__toolbar-actions">
-              <Button size="md" variant="secondary">전체 상태 ⌄</Button>
-              <Button size="md" variant="secondary">최근 활동 순 ⌄</Button>
+              <Button disabled size="md" variant="secondary">전체 상태 ⌄</Button>
+              <Button disabled size="md" variant="secondary">최근 활동 순 ⌄</Button>
             </div>
           </div>
 
