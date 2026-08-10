@@ -235,12 +235,18 @@ a1b2c3d
           <h2>Domain Components</h2>
           <ResponsiveGrid desktopColumns={3}>
             <ProjectCard
-              description="팀의 작업 맥락을 프로젝트 메모리로 연결합니다."
-              memberCount={6}
+              id="contextory-mvp"
+              icon="C"
               name="Contextory MVP"
-              repositoryLabel="contextory/frontend"
-              status="Active"
-              action={<Button size="sm">Open</Button>}
+              description="팀의 작업 맥락을 프로젝트 메모리로 연결합니다."
+              role="Owner"
+              plan="Team"
+              repositoryConnected
+              approvedRecords={128}
+              pendingTasks={6}
+              creditsUsed={1200}
+              creditsTotal={5000}
+              members={["Y", "H", "K"]}
             />
             <KpiCard label="Pending reviews" value={8} description="검토가 필요한 분석 초안" trend="+2 this week" />
             <PlanCard

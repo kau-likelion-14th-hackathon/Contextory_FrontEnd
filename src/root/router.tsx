@@ -8,6 +8,7 @@ import { EmailVerificationScreen } from "../features/auth/EmailVerificationScree
 import { ProjectJoinScreen } from "../features/auth/ProjectJoinScreen";
 import { ProjectHomeScreen } from "../features/project/ProjectHomeScreen";
 import { GitHubWorkScreen } from "../features/github/GitHubWorkScreen";
+import { ProjectSelectScreen } from "../features/project/ProjectSelectScreen";
 import { ProjectMemoryDetailScreen } from "../features/memory/ProjectMemoryDetailScreen";
 import { ProjectMemoryScreen } from "../features/memory/ProjectMemoryScreen";
 import { TeamProjectSettingsScreen } from "../features/settings/TeamProjectSettingsScreen";
@@ -19,7 +20,6 @@ import { WorkspaceShell } from "../features/workspace/WorkspaceShell";
 import {
   NotFoundScreen,
   ProjectCreateScreen,
-  ProjectSelectScreen,
 } from "../features/workspace/WorkspaceScreens";
 
 export const router = createBrowserRouter([
@@ -60,7 +60,7 @@ export const router = createBrowserRouter([
     children: [
       {
         path: "/projects",
-        element: <ProjectSelectScreen />,
+        element: <ProjectSelectScreen />, // 빈 프로젝트 화면, 내 프로젝트 화면
       },
       {
         path: "/projects/new",

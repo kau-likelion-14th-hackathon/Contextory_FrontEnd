@@ -1,10 +1,8 @@
 import { Link } from "react-router-dom";
-import { ProjectCard } from "../project/components";
 import { AuthLayout, PageContainer } from "../../shared/layouts";
 import {
   EmptyState,
 } from "../../shared/components/AppState";
-import { projectSummary } from "../projects/projectSummary";
 
 type AuthMode = "login" | "signup" | "forgot-password";
 
@@ -101,38 +99,6 @@ export function ResetPasswordScreen() {
 //   );
 // }
 
-export function ProjectSelectScreen() {
-  return (
-    <main>
-      <PageContainer>
-      <section className="content-section">
-        <p className="eyebrow">Projects</p>
-        <h1>Project Select</h1>
-        <p className="text-muted">
-          로그인 이후 프로젝트 선택 전 영역입니다. 프로젝트 목록과 생성 흐름은
-          최신 프로젝트 API 명세를 받은 뒤 연결합니다.
-        </p>
-        <ProjectCard
-          description="Contextory 초기 기반 검증용 프로젝트 자리입니다."
-          memberCount={4}
-          name={projectSummary.name}
-          repositoryLabel="Repository not connected"
-          status="Placeholder"
-          action={
-            <Link
-              className="ui-button ui-button--primary ui-button--sm"
-              to={`/projects/${projectSummary.id}/home`}
-            >
-              Enter project
-            </Link>
-          }
-        />
-      </section>
-      </PageContainer>
-    </main>
-  );
-}
-
 export function ProjectCreateScreen() {
   return (
     <main>
@@ -145,7 +111,7 @@ export function ProjectCreateScreen() {
         />
       </section>
       </PageContainer>
-    </main>
+    </main> 
   );
 }
 
