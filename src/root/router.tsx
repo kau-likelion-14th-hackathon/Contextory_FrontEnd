@@ -11,6 +11,7 @@ import { GitHubWorkScreen } from "../features/github/GitHubWorkScreen";
 import { ProjectSelectScreen } from "../features/project/ProjectSelectScreen";
 import { ProjectMemoryDetailScreen } from "../features/memory/ProjectMemoryDetailScreen";
 import { ProjectMemoryScreen } from "../features/memory/ProjectMemoryScreen";
+import { TeamProjectSettingsScreen } from "../features/settings/TeamProjectSettingsScreen";
 import {
   AuthBoundary,
   ProjectBoundary,
@@ -19,7 +20,6 @@ import { WorkspaceShell } from "../features/workspace/WorkspaceShell";
 import {
   NotFoundScreen,
   ProjectCreateScreen,
-  TeamSettingsScreen,
 } from "../features/workspace/WorkspaceScreens";
 
 export const router = createBrowserRouter([
@@ -107,7 +107,7 @@ export const router = createBrowserRouter([
               },
               {
                 path: "settings",
-                element: <TeamSettingsScreen />,
+                element: <TeamProjectSettingsScreen />,
               },
             ],
           },
