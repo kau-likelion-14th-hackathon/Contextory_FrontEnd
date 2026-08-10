@@ -390,10 +390,12 @@ function MemberTableRow({
   return (
     <tr>
       <th data-label="이름" scope="row">
-        <span aria-hidden="true" className="settings-member-avatar">
-          {member.name.slice(0, 1)}
+        <span className="settings-member-identity">
+          <span aria-hidden="true" className="settings-member-avatar">
+            {member.name.slice(0, 1)}
+          </span>
+          <span className="settings-member-name">{displayName}</span>
         </span>
-        <span>{displayName}</span>
       </th>
       <td data-label="이메일">{member.email}</td>
       <td data-label="역할"><Badge variant="success">{member.role}</Badge></td>

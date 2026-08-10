@@ -409,11 +409,8 @@
 }
 
 .settings-members-table tbody th {
-  align-items: center;
   color: var(--color-text-primary);
-  display: flex;
   font-weight: 600;
-  gap: 10px;
 }
 
 .settings-members-table tr:last-child th,
@@ -421,11 +418,18 @@
   border-bottom: 0;
 }
 
-.settings-members-table th:nth-child(1) { width: 21%; }
-.settings-members-table th:nth-child(2) { width: 25%; }
-.settings-members-table th:nth-child(3) { width: 15%; }
-.settings-members-table th:nth-child(4) { width: 26%; }
-.settings-members-table th:nth-child(5) { width: 13%; }
+.settings-members-table thead th:nth-child(1) { width: 21%; }
+.settings-members-table thead th:nth-child(2) { width: 25%; }
+.settings-members-table thead th:nth-child(3) { width: 15%; }
+.settings-members-table thead th:nth-child(4) { width: 26%; }
+.settings-members-table thead th:nth-child(5) { width: 13%; }
+
+.settings-member-identity {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
 
 .settings-member-avatar {
   align-items: center;
@@ -438,6 +442,13 @@
   height: 28px;
   justify-content: center;
   width: 28px;
+}
+
+.settings-member-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-member-actions {
@@ -523,11 +534,7 @@
     height: auto;
     min-width: 0;
     padding: 7px 0;
-    width: auto;
-  }
-
-  .settings-members-table tbody th {
-    grid-template-columns: 92px 28px minmax(0, 1fr);
+    width: 100%;
   }
 
   .settings-members-table tbody th::before,
@@ -631,10 +638,6 @@
   .settings-members-table tbody th,
   .settings-members-table tbody td {
     grid-template-columns: 82px minmax(0, 1fr);
-  }
-
-  .settings-members-table tbody th {
-    grid-template-columns: 82px 28px minmax(0, 1fr);
   }
 
   .settings-member-actions {
