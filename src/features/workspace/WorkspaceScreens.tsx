@@ -1,8 +1,5 @@
 import { Link } from "react-router-dom";
 import { AuthLayout, PageContainer } from "../../shared/layouts";
-import {
-  EmptyState,
-} from "../../shared/components/AppState";
 
 type AuthMode = "login" | "signup" | "forgot-password";
 
@@ -98,22 +95,6 @@ export function ResetPasswordScreen() {
 //     </main>
 //   );
 // }
-
-export function ProjectCreateScreen() {
-  return (
-    <main>
-      <PageContainer>
-      <section className="content-section">
-        <h1>New project</h1>
-        <EmptyState
-          title="Project creation is not connected"
-          description="프로젝트 이름, 목적, 주요 기능, 팀 역할 입력은 백엔드 명세 확정 후 연결합니다."
-        />
-      </section>
-      </PageContainer>
-    </main> 
-  );
-}
 
 export function NotFoundScreen() {
   return (
