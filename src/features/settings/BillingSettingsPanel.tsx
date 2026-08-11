@@ -11,39 +11,22 @@ import {
 import "./BillingSettingsPanel.css";
 
 type BillingSettingsPanelProps = {
-  feedback: string;
   state: BillingViewState;
   onFeedback: (message: string) => void;
 };
 
-const stateDescriptions: Record<BillingViewState, string> = {
+export const stateDescriptions: Record<BillingViewState, string> = {
   default: "현재 구독, 팀원 수, 크레딧 사용량과 플랜을 관리하세요.",
   "trial-ended": "무료 체험 종료 후 플랜 상태와 다음 선택을 확인하세요.",
   "payment-success": "결제 결과와 반영된 크레딧을 확인하세요.",
   "payment-failed": "결제 오류를 확인하고 안전하게 다시 시도하세요.",
 };
 
-export function BillingSettingsPanel({ feedback, state, onFeedback }: BillingSettingsPanelProps) {
+export function BillingSettingsPanel({ state, onFeedback }: BillingSettingsPanelProps) {
   const currentPlanId = state === "trial-ended" ? "free" : "team";
 
   return (
     <section aria-label="결제 및 플랜 설정" className="billing-settings" role="tabpanel">
-      <header className="billing-settings__header">
-        <div>
-          <h1>결제 및 플랜</h1>
-          <p>{stateDescriptions[state]}</p>
-          <p aria-live="polite" className="billing-settings__feedback">{feedback}</p>
-        </div>
-        <Button
-          className="billing-settings__history-button"
-          onClick={() => onFeedback("결제 내역 기능은 현재 결제 시스템과 연결되어 있지 않습니다.")}
-          size="sm"
-          variant="secondary"
-        >
-          결제 내역
-        </Button>
-      </header>
-
       {state === "default" ? <BillingSummary /> : (
         <BillingStateBanner onFeedback={onFeedback} state={state} />
       )}
