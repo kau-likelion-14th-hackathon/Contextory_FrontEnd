@@ -18,6 +18,7 @@ export function WorkspaceShell() {
         title={projectName}
         subtitle={repositoryLabel}
         user="홍길동"
+        userEmail="hong@example.com"
         onMenuClick={() => setSidebarOpen(true)}
       />
 

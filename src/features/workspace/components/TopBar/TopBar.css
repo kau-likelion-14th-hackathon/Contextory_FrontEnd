@@ -24,7 +24,7 @@
   font-size: 14px;
 }
 
-.top-bar__leading p:last-child {
+.top-bar__subtitle {
   color: var(--color-text-muted);
   font-size: 11px;
 }
@@ -99,7 +99,7 @@
   }
 
   .top-bar h1,
-  .top-bar__leading p:last-child {
+  .top-bar__subtitle {
     overflow-wrap: anywhere;
   }
 

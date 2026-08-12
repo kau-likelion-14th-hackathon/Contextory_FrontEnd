@@ -22,25 +22,29 @@ import {
   type ProjectSettingsFormValue,
   type TeamMemberViewModel,
 } from "./teamProjectSettingsMock";
+import { BillingSettingsPanel, stateDescriptions } from "./BillingSettingsPanel";
+import { isBillingViewState } from "./billingSettingsMock";
 import "./TeamProjectSettingsScreen.css";
 
-type SettingsTab = "project" | "github" | "members";
+type SettingsTab = "project" | "github" | "members" | "billing";
 
 const settingsTabs: TabItem[] = [
   { id: "project", label: "프로젝트 정보" },
   { id: "github", label: "GitHub 저장소" },
   { id: "members", label: "팀원 및 역할" },
-  { id: "billing", label: "결제 및 플랜 (준비 중)", disabled: true },
+  { id: "billing", label: "결제 및 플랜" },
 ];
 
 function isSettingsTab(value: string | null): value is SettingsTab {
-  return value === "project" || value === "github" || value === "members";
+  return value === "project" || value === "github" || value === "members" || value === "billing";
 }
 
 export function TeamProjectSettingsScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   const activeTab: SettingsTab = isSettingsTab(tabParam) ? tabParam : "members";
+  const billingStateParam = searchParams.get("billingState");
+  const billingState = isBillingViewState(billingStateParam) ? billingStateParam : "default";
   const [feedback, setFeedback] = useState("");
 
   const changeTab = (tabId: string) => {
@@ -56,12 +60,30 @@ export function TeamProjectSettingsScreen() {
     <main className="team-project-settings">
       <PageContainer size="full">
         <div className="team-project-settings__content">
-          <header className="team-project-settings__header">
-            <h1>팀 및 프로젝트 설정</h1>
-            <p aria-live="polite" className="team-project-settings__feedback">
-              {feedback}
-            </p>
-          </header>
+          {activeTab === "billing" ? (
+            <header className="billing-settings__header">
+              <div>
+                <h1>결제 및 플랜</h1>
+                <p>{stateDescriptions[billingState]}</p>
+                <p aria-live="polite" className="billing-settings__feedback">{feedback}</p>
+              </div>
+              <Button
+                className="billing-settings__history-button"
+                onClick={() => setFeedback("결제 내역 기능은 현재 결제 시스템과 연결되어 있지 않습니다.")}
+                size="sm"
+                variant="secondary"
+              >
+                결제 내역
+              </Button>
+            </header>
+          ) : (
+            <header className="team-project-settings__header">
+              <h1>팀 및 프로젝트 설정</h1>
+              <p aria-live="polite" className="team-project-settings__feedback">
+                {feedback}
+              </p>
+            </header>
+          )}
 
           <div className="team-project-settings__tabs">
             <Tabs
@@ -80,6 +102,12 @@ export function TeamProjectSettingsScreen() {
           ) : null}
           {activeTab === "members" ? (
             <MembersPanel onFeedback={setFeedback} />
+          ) : null}
+          {activeTab === "billing" ? (
+            <BillingSettingsPanel
+              onFeedback={setFeedback}
+              state={billingState}
+            />
           ) : null}
         </div>
       </PageContainer>
