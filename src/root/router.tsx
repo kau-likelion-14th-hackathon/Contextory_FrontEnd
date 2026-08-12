@@ -8,6 +8,7 @@ import { EmailVerificationScreen } from "../features/auth/EmailVerificationScree
 import { ProjectJoinScreen } from "../features/auth/ProjectJoinScreen";
 import { ProjectHomeScreen } from "../features/project/ProjectHomeScreen";
 import { GitHubWorkScreen } from "../features/github/GitHubWorkScreen";
+import { ProjectCreateScreen } from "../features/project/ProjectCreateScreen";
 import { ProjectSelectScreen } from "../features/project/ProjectSelectScreen";
 import { ProjectMemoryDetailScreen } from "../features/memory/ProjectMemoryDetailScreen";
 import { ProjectMemoryScreen } from "../features/memory/ProjectMemoryScreen";
@@ -17,10 +18,7 @@ import {
   ProjectBoundary,
 } from "../features/workspace/RouteBoundaries";
 import { WorkspaceShell } from "../features/workspace/WorkspaceShell";
-import {
-  NotFoundScreen,
-  ProjectCreateScreen,
-} from "../features/workspace/WorkspaceScreens";
+import { NotFoundScreen } from "../features/workspace/WorkspaceScreens";
 
 export const router = createBrowserRouter([
   {
