@@ -46,8 +46,36 @@
 }
 
 .project-select__toolbar-actions {
+  align-items: center;
   display: flex;
   gap: 12px;
+}
+
+.project-select__toolbar-actions select {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  height: 44px;
+  padding: 0 14px;
+}
+
+.project-select__visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.project-select__pagination {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .project-select .feedback-state {
@@ -120,5 +148,18 @@
   .project-select__toolbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .project-select__toolbar-actions {
+    flex-direction: column;
+  }
+
+  .project-select__toolbar-actions .ui-button,
+  .project-select__toolbar-actions select {
+    width: 100%;
+  }
+
+  .project-select__pagination {
+    justify-content: center;
   }
 }
