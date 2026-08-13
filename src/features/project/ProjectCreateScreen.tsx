@@ -51,9 +51,13 @@ export function ProjectCreateScreen() {
   const [repositoryStatus, setRepositoryStatus] = useState<RepositoryStatus>("idle");
   const [feedback, setFeedback] = useState("");
   const [completed, setCompleted] = useState(false);
+  const previousViewRef = useRef({ completed, step });
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
+    const previousView = previousViewRef.current;
+    if (previousView.step === step && previousView.completed === completed) return;
+    previousViewRef.current = { completed, step };
     stepHeadingRef.current?.focus();
   }, [step, completed]);
 
@@ -143,6 +147,7 @@ export function ProjectCreateScreen() {
       <TopBar title="새 프로젝트" user={projectCreatorMock.name} />
       <PageContainer size="lg">
         <div className="project-create__content">
+          <h1 className="project-create__visually-hidden">새 프로젝트</h1>
           <header className="project-create__intro">
             <p className="eyebrow">PROJECT SETUP</p>
             <p>프로젝트 맥락과 협업 기준을 3단계로 설정합니다.</p>

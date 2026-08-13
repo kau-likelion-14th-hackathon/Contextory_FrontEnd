@@ -6,6 +6,11 @@ import "./Auth.css";
 
 export type AuthMode = "login" | "signup";
 
+type AuthErrors = Partial<Record<"name" | "email" | "password" | "passwordConfirm" | "agreed", string>>;
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PASSWORD_MISMATCH_ERROR = "비밀번호가 일치하지 않습니다.";
+
 export function AuthScreen({ mode }: { mode: AuthMode }) {
   const navigate = useNavigate();
 
@@ -16,6 +21,7 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
   const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<AuthErrors>({});
 
   function handleTabChange(id: string) {
     navigate(id === "login" ? "/auth/login" : "/auth/signup");
@@ -23,6 +29,35 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    const nextErrors: AuthErrors = {};
+
+    if (mode === "signup" && !name.trim()) nextErrors.name = "이름을 입력해주세요.";
+    if (!email.trim()) {
+      nextErrors.email = "이메일을 입력해주세요.";
+    } else if (!EMAIL_PATTERN.test(email)) {
+      nextErrors.email = "올바른 이메일 형식을 입력해주세요.";
+    }
+    if (!password) {
+      nextErrors.password = "비밀번호를 입력해주세요.";
+    } else if (mode === "signup" && password.length < 8) {
+      nextErrors.password = "비밀번호는 8자 이상 입력해주세요.";
+    }
+    if (mode === "signup" && !passwordConfirm) {
+      nextErrors.passwordConfirm = "비밀번호 확인을 입력해주세요.";
+    } else if (mode === "signup" && password !== passwordConfirm) {
+      nextErrors.passwordConfirm = PASSWORD_MISMATCH_ERROR;
+    }
+    if (mode === "signup" && !agreed) nextErrors.agreed = "약관에 동의해주세요.";
+
+    setErrors(nextErrors);
+    const firstError = Object.keys(nextErrors)[0];
+    if (firstError) {
+      window.requestAnimationFrame(() => {
+        document.getElementById(`auth-${firstError}`)?.focus();
+      });
+      return;
+    }
+
     // TODO: 명세 확정되면 실제 요청으로 교체
     setLoading(true);
     navigate("/projects");
@@ -66,39 +101,72 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
           ]}
         />
 
-        <form className="auth-card__form" onSubmit={handleSubmit}>
+        <form className="auth-card__form" noValidate onSubmit={handleSubmit}>
           {mode === "signup" ? (
             <FormField
+              errorMessage={errors.name}
+              id="auth-name"
               label="이름"
               placeholder="홍길동"
+              required
               value={name}
-              onChange={(event) => setName(event.target.value)}
+              onChange={(event) => {
+                setName(event.target.value);
+                setErrors((current) => ({ ...current, name: undefined }));
+              }}
             />
           ) : null}
 
           <FormField
+            errorMessage={errors.email}
+            id="auth-email"
             label="이메일"
             type="email"
             placeholder="you@example.com"
+            required
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setErrors((current) => ({ ...current, email: undefined }));
+            }}
           />
 
           <FormField
+            errorMessage={errors.password}
+            id="auth-password"
             label="비밀번호"
             type="password"
             placeholder={mode === "login" ? "비밀번호를 입력하세요" : "8자 이상 입력해주세요"}
+            required
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) => {
+              const nextPassword = event.target.value;
+              setPassword(nextPassword);
+              setErrors((current) => ({
+                ...current,
+                password: undefined,
+                passwordConfirm:
+                  current.passwordConfirm === PASSWORD_MISMATCH_ERROR
+                  && nextPassword === passwordConfirm
+                    ? undefined
+                    : current.passwordConfirm,
+              }));
+            }}
           />
 
           {mode === "signup" ? (
             <FormField
+              errorMessage={errors.passwordConfirm}
+              id="auth-passwordConfirm"
               label="비밀번호 확인"
               type="password"
               placeholder="비밀번호를 다시 입력해주세요"
+              required
               value={passwordConfirm}
-              onChange={(event) => setPasswordConfirm(event.target.value)}
+              onChange={(event) => {
+                setPasswordConfirm(event.target.value);
+                setErrors((current) => ({ ...current, passwordConfirm: undefined }));
+              }}
             />
           ) : null}
 
@@ -115,14 +183,24 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
               <Link to="/auth/forgot-password">비밀번호 찾기</Link>
             </div>
           ) : (
-            <label className="auth-card__checkbox">
+            <div className="auth-card__agreement">
+              <label className="auth-card__checkbox">
               <input
+                aria-describedby={errors.agreed ? "auth-agreed-error" : undefined}
+                aria-invalid={Boolean(errors.agreed) || undefined}
                 checked={agreed}
-                onChange={(event) => setAgreed(event.target.checked)}
+                id="auth-agreed"
+                onChange={(event) => {
+                  setAgreed(event.target.checked);
+                  setErrors((current) => ({ ...current, agreed: undefined }));
+                }}
+                required
                 type="checkbox"
               />
               이용약관 및 개인정보 처리방침에 동의합니다.
-            </label>
+              </label>
+              {errors.agreed ? <p className="form-field__error" id="auth-agreed-error">{errors.agreed}</p> : null}
+            </div>
           )}
 
           <Button fullWidth loading={loading} type="submit" variant="primary">

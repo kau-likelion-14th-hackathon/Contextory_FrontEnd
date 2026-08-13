@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AuthLayout } from "../../shared/layouts";
 import { Button } from "../../shared/ui";
@@ -16,18 +17,21 @@ export function EmailVerificationScreen() {
   const status: EmailVerificationStatus = isEmailVerificationStatus(statusParam)
     ? statusParam
     : "pending";
+  const [feedback, setFeedback] = useState({ message: "", revision: 0 });
 
   // TODO: 이메일 인증 API 명세 확정되면 교체
   const verifiedEmail = "hong@example.com";
 
-    function handlePrimaryAction() {
+  function handlePrimaryAction() {
     if (status === "success") {
-        navigate("/projects");
-        return;
+      navigate("/projects");
+      return;
     }
-    // TODO: status === "pending" | "expired" — 둘 다 인증 메일 재발송
-    // 이메일 인증 API 명세 확정되면 실제 재발송 요청 연결
-    }
+    setFeedback((current) => ({
+      message: `${verifiedEmail} 인증 메일 재발송을 mock으로 요청했습니다.`,
+      revision: current.revision + 1,
+    }));
+  }
 
   return (
     <AuthLayout
@@ -48,6 +52,9 @@ export function EmailVerificationScreen() {
       }
     >
       <div className="auth-card auth-card--centered">
+        <p aria-atomic="true" aria-live="polite" className="auth-card__feedback">
+          {feedback.message ? <span key={feedback.revision}>{feedback.message}</span> : null}
+        </p>
         {status === "pending" ? (
         <>
           <span aria-hidden="true" className="auth-card__icon auth-card__icon--pending">

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AuthLayout } from "../../shared/layouts";
 import { Button } from "../../shared/ui";
@@ -26,10 +27,13 @@ export function ProjectJoinScreen() {
   const navigate = useNavigate();
   const statusParam = searchParams.get("status");
   const status: ProjectJoinStatus = isProjectJoinStatus(statusParam) ? statusParam : "invited";
+  const [feedback, setFeedback] = useState({ message: "", revision: 0 });
 
   function handleAccept() {
-    // POST /api/invitations/{token}/accept 연결
-    // TODO: 로그인 안 된 상태면 로그인/회원가입으로 보내고 -> 완료 후 이 화면으로 복귀시키는 처리 필요
+    setFeedback((current) => ({
+      message: "프로젝트 참여를 mock으로 확인했습니다. 실제 참여 정보는 변경되지 않았습니다.",
+      revision: current.revision + 1,
+    }));
   }
 
   return (
@@ -51,6 +55,9 @@ export function ProjectJoinScreen() {
       }
     >
       <div className="auth-card auth-card--centered">
+        <p aria-atomic="true" aria-live="polite" className="auth-card__feedback">
+          {feedback.message ? <span key={feedback.revision}>{feedback.message}</span> : null}
+        </p>
         {status === "invited" ? (
           <>
             <span aria-hidden="true" className="auth-card__project-badge">

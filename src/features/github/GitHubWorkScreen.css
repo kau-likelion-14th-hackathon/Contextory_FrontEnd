@@ -59,31 +59,40 @@
   min-width: 220px;
 }
 
-.github-work__filters .ui-input,
-.github-work__filters > .ui-button {
+.github-work__filters .ui-input {
   height: 44px;
-}
-
-.github-work__filters > .ui-button {
-  flex: 0 0 150px;
 }
 
 .github-work__repository-filter {
   height: 44px;
+  flex: 0 0 150px;
+  align-items: center;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  display: flex;
+  font-size: 11px;
+  min-width: 0;
+  padding: 0 12px;
   width: 150px;
 }
 
-.github-work__repository-filter > span {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
+.github-work__repository-filter-label {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 
-.github-work__repository-filter-chevron {
-  align-items: center;
-  display: inline-flex;
-  line-height: 1;
+.github-work__repository-filter-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
 }
 
 .github-work__filter-chips {
@@ -362,7 +371,7 @@
   }
 
   .github-work__filters .search-input,
-  .github-work__filters > .ui-button,
+  .github-work__repository-filter,
   .github-work__filter-chips {
     grid-column: 1 / -1;
     min-width: 0;

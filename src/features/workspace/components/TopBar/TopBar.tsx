@@ -35,7 +35,7 @@ export function TopBar({
         ) : null}
         <div>
           <p className="eyebrow">Contextory</p>
-          {title ? <h1>{title}</h1> : null}
+          {title ? <p className="top-bar__title">{title}</p> : null}
           {subtitle ? <p className="top-bar__subtitle">{subtitle}</p> : null}
         </div>
       </div>
