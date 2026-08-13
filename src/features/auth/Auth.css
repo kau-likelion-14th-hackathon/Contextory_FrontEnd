@@ -48,6 +48,22 @@ div.auth-card__header p {
   margin-top: 18px;
 }
 
+.auth-card__form > *,
+.auth-card__header,
+.auth-card__row,
+.auth-card__agreement {
+  min-width: 0;
+}
+
+.auth-card__agreement {
+  display: grid;
+  gap: 6px;
+}
+
+.auth-card__agreement .form-field__error {
+  margin: 0;
+}
+
 .auth-card__row {
   display: flex;
   align-items: center;
@@ -106,6 +122,24 @@ div.auth-card__header p {
   margin-top: 14px;
   font-size: 13px;
   text-align: left;
+}
+
+.auth-card__feedback {
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.auth-card__feedback:empty {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 
 .auth-card__notice strong {

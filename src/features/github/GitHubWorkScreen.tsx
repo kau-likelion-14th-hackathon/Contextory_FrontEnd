@@ -132,20 +132,10 @@ export function GitHubWorkScreen() {
                 placeholder="PR 제목, 번호, 작성자 검색..."
                 value={searchTerm}
               />
-              <Button
-                aria-haspopup="listbox"
-                className="github-work__repository-filter"
-                size="md"
-                variant="secondary"
-              >
-                모든 저장소
-                <span
-                  aria-hidden="true"
-                  className="github-work__repository-filter-chevron"
-                >
-                  ⌄
-                </span>
-              </Button>
+              <div className="github-work__repository-filter">
+                <span className="github-work__repository-filter-label">연결된 저장소</span>
+                <span className="github-work__repository-filter-value">team/contextory-web</span>
+              </div>
               <div className="github-work__filter-chips" aria-label="AI 분석 상태 필터">
                 {analysisFilters.map((filter) => (
                   <button
@@ -207,7 +197,7 @@ export function GitHubWorkScreen() {
                 </div>
                 <footer className="github-work__pagination">
                   <p>
-                    전체 {searchTerm || analysisFilter !== "전체" ? filteredPullRequests.length : 128}개 중{" "}
+                    전체 {filteredPullRequests.length}개 중{" "}
                     {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredPullRequests.length)}개 표시
                   </p>
                   <Pagination
@@ -216,7 +206,7 @@ export function GitHubWorkScreen() {
                     nextLabel="다음 페이지"
                     onPageChange={setCurrentPage}
                     previousLabel="이전 페이지"
-                    totalPages={searchTerm || analysisFilter !== "전체" ? totalPages : 5}
+                    totalPages={totalPages}
                   />
                 </footer>
               </>

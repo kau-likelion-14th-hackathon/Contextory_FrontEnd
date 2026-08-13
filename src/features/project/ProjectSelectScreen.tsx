@@ -94,7 +94,7 @@ export function ProjectSelectScreen() {
         <div className="project-select__content">
           <div className="project-select__heading">
             <div>
-              <h2>내 프로젝트</h2>
+              <h1>내 프로젝트</h1>
               <p>참여 중인 프로젝트를 선택하거나 새 프로젝트를 생성하세요.</p>
             </div>
             <Link className="ui-button ui-button--primary ui-button--md" to="/projects/new">

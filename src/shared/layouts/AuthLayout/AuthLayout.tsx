@@ -20,7 +20,7 @@ export function AuthLayout({ title, description, children }: AuthLayoutProps) {
         <div className="auth-layout-shell__brand-content">
           <p className="auth-layout-shell__brand-logo">Contextory</p>
           <div className="auth-layout-shell__brand-headers">
-            <h1 id="auth-layout-title">{title}</h1>
+            <div className="auth-layout-shell__brand-heading" id="auth-layout-title">{title}</div>
             {description ? <p className="auth-layout-shell__brand-description">{description}</p> : null}
           </div>
           <ul className="auth-layout-shell__features">

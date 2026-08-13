@@ -10,6 +10,27 @@
   min-width: 0;
 }
 
+.project-home__feedback {
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.project-home__feedback:empty {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.project-home__billing-link {
+  width: 100%;
+}
+
 .project-home__header {
   align-items: center;
   display: flex;
