@@ -2,6 +2,9 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthLayout } from "../../shared/layouts";
 import { Button, FormField, Tabs } from "../../shared/ui";
+import { ApiError } from "../../shared/api/client";
+import { setSession } from "../../shared/api/session";
+import { login, signup } from "./authApi";
 import "./Auth.css";
 
 export type AuthMode = "login" | "signup";
@@ -10,6 +13,16 @@ type AuthErrors = Partial<Record<"name" | "email" | "password" | "passwordConfir
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_MISMATCH_ERROR = "비밀번호가 일치하지 않습니다.";
+
+function getServerErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof ApiError) {
+    const body = error.bodyJson as { message?: string } | undefined;
+    if (body?.message) return body.message;
+    if (error.kind === "unauthorized") return "아이디 또는 비밀번호를 다시 확인해주세요.";
+    if (error.kind === "network") return "네트워크 연결을 확인해주세요.";
+  }
+  return fallback;
+}
 
 export function AuthScreen({ mode }: { mode: AuthMode }) {
   const navigate = useNavigate();
@@ -22,13 +35,15 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<AuthErrors>({});
+  const [serverError, setServerError] = useState("");
 
   function handleTabChange(id: string) {
     navigate(id === "login" ? "/auth/login" : "/auth/signup");
   }
 
-  function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    setServerError("");
     const nextErrors: AuthErrors = {};
 
     if (mode === "signup" && !name.trim()) nextErrors.name = "이름을 입력해주세요.";
@@ -58,9 +73,24 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
       return;
     }
 
-    // TODO: 명세 확정되면 실제 요청으로 교체
     setLoading(true);
-    navigate("/projects");
+    try {
+      const result =
+        mode === "login"
+          ? await login({ loginId: email, password })
+          : await signup({ loginId: email, username: name, password, introduction: "" });
+      setSession(result, mode === "login" && keepSignedIn);
+      navigate("/projects");
+    } catch (error) {
+      setServerError(
+        getServerErrorMessage(
+          error,
+          mode === "login" ? "로그인에 실패했습니다. 잠시 후 다시 시도해주세요." : "회원가입에 실패했습니다. 잠시 후 다시 시도해주세요.",
+        ),
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -203,6 +233,12 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
             </div>
           )}
 
+          {serverError ? (
+            <p className="auth-card__feedback" role="alert">
+              {serverError}
+            </p>
+          ) : null}
+
           <Button fullWidth loading={loading} type="submit" variant="primary">
             {mode === "login" ? "로그인" : "회원가입"}
           </Button>
@@ -213,8 +249,8 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
         </div>
 
         <Button fullWidth variant="secondary">
-          GitHub로 계속하기
-        </Button>
+          GitHub 계속하기 
+        </Button> {/* TODO: 깃허브로그인에서 카카오로 수정 필요*/}
 
         <p className="auth-card__switch">
           {mode === "login" ? (
