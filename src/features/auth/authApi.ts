@@ -1,37 +1,132 @@
-import { requestJson } from "../../shared/api/client";
-import type { AuthResult } from "../../shared/api/session";
+import {
+  requestApiResult,
+  setUnauthorizedHandler,
+} from "../../shared/api/client";
+import {
+  clearSession,
+  updateAccessToken,
+  type AuthSession,
+} from "../../shared/api/session";
 
-type ApiEnvelope<TResult> = {
-  isSuccess: boolean;
-  code: string;
-  message: string;
-  result: TResult;
+export type AuthResponse = {
+  id: number;
+  loginId: string;
+  username: string;
+  introduction: string;
+  profileImage: string;
+  accessToken: string;
 };
 
-export type LoginPayload = {
+export type LoginRequest = {
   loginId: string;
   password: string;
 };
 
-export type SignupPayload = {
+export type SignupRequest = {
   loginId: string;
   username: string;
   password: string;
   introduction: string;
 };
 
-export async function login(payload: LoginPayload) {
-  const response = await requestJson<ApiEnvelope<AuthResult>>("/api/auth/login", {
-    method: "POST",
-    body: payload,
-  });
-  return response.result;
+export type KakaoLoginRequest = {
+  code: string;
+  isDevelop: boolean;
+};
+
+let reissuePromise: Promise<string> | undefined;
+let kakaoLoginRequest: { code: string; promise: Promise<AuthResponse> } | undefined;
+
+export function toAuthSession(response: AuthResponse): AuthSession {
+  return {
+    accessToken: response.accessToken,
+    user: {
+      id: response.id,
+      loginId: response.loginId,
+      username: response.username,
+      introduction: response.introduction,
+      profileImage: response.profileImage,
+    },
+  };
 }
 
-export async function signup(payload: SignupPayload) {
-  const response = await requestJson<ApiEnvelope<AuthResult>>("/api/auth/signup", {
+export function login(body: LoginRequest) {
+  return requestApiResult<AuthResponse>("/api/auth/login", {
+    authenticated: false,
+    body,
     method: "POST",
-    body: payload,
+    retryUnauthorized: false,
   });
-  return response.result;
 }
+
+export function signup(body: SignupRequest) {
+  return requestApiResult<AuthResponse>("/api/auth/signup", {
+    authenticated: false,
+    body,
+    method: "POST",
+    retryUnauthorized: false,
+  });
+}
+
+export function kakaoLogin(body: KakaoLoginRequest) {
+  if (kakaoLoginRequest?.code === body.code) return kakaoLoginRequest.promise;
+
+  const promise = requestApiResult<AuthResponse>("/api/auth/kakao", {
+    authenticated: false,
+    body,
+    method: "POST",
+    retryUnauthorized: false,
+  }).finally(() => {
+    if (kakaoLoginRequest?.promise === promise) kakaoLoginRequest = undefined;
+  });
+
+  kakaoLoginRequest = { code: body.code, promise };
+  return promise;
+}
+
+export function reissue() {
+  if (!reissuePromise) {
+    reissuePromise = requestApiResult<string>("/api/auth/reissue", {
+      authenticated: false,
+      method: "POST",
+      retryUnauthorized: false,
+    })
+      .then((accessToken) => {
+        updateAccessToken(accessToken);
+        return accessToken;
+      })
+      .catch((error: unknown) => {
+        clearSession();
+        throw error;
+      })
+      .finally(() => {
+        reissuePromise = undefined;
+      });
+  }
+
+  return reissuePromise;
+}
+
+export async function logout() {
+  let logoutError: unknown;
+
+  try {
+    await requestApiResult<unknown>("/api/auth/logout", {
+      method: "POST",
+    });
+  } catch (error) {
+    logoutError = error;
+  } finally {
+    clearSession();
+  }
+
+  if (logoutError) throw logoutError;
+}
+
+export function withdraw() {
+  return requestApiResult<unknown>("/api/auth/withdraw", {
+    method: "DELETE",
+  });
+}
+
+setUnauthorizedHandler(reissue);

@@ -1,7 +1,19 @@
-import { useCallback, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { Button, Input, Modal } from "../../shared/ui";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { getApiErrorMessage } from "../../shared/api/client";
+import {
+  clearSession,
+  getCurrentUser,
+  updateSessionUser,
+} from "../../shared/api/session";
+import { Button, FormField, Input, Modal } from "../../shared/ui";
+import { logout, withdraw } from "../auth/authApi";
 import { TopBar } from "../workspace/components/TopBar";
+import {
+  getMyInfo,
+  updateMyInfo,
+  type MyInfoResponse,
+} from "./accountApi";
 import {
   accountProfileMock,
   accountSections,
@@ -32,34 +44,182 @@ function getProjectReturnPath(state: unknown) {
 
 export function AccountSettingsScreen() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const sessionUser = getCurrentUser();
   const [activeSection, setActiveSection] = useState<AccountSectionId>("account-profile");
   const [feedback, setFeedback] = useState("");
+  const [profile, setProfile] = useState<MyInfoResponse | null>(() =>
+    sessionUser
+      ? {
+          introduction: sessionUser.introduction,
+          loginId: sessionUser.loginId,
+          profileImage: sessionUser.profileImage,
+          userId: sessionUser.id,
+          username: sessionUser.username,
+        }
+      : null,
+  );
+  const [profileDraft, setProfileDraft] = useState({
+    introduction: sessionUser?.introduction ?? "",
+    username: sessionUser?.username ?? "",
+  });
+  const [profileEditing, setProfileEditing] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [logoutLoading, setLogoutLoading] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const returnPath = getProjectReturnPath(location.state);
+
+  useEffect(() => {
+    let active = true;
+
+    getMyInfo()
+      .then((response) => {
+        if (!active) return;
+        setProfile(response);
+        setProfileDraft({
+          introduction: response.introduction,
+          username: response.username,
+        });
+        updateSessionUser({
+          id: response.userId,
+          introduction: response.introduction,
+          loginId: response.loginId,
+          profileImage: response.profileImage,
+          username: response.username,
+        });
+      })
+      .catch((error: unknown) => {
+        if (active) setFeedback(getApiErrorMessage(error, "사용자 정보를 불러오지 못했습니다."));
+      })
+      .finally(() => {
+        if (active) setProfileLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const closeDeleteModal = useCallback(() => {
     setDeleteModalOpen(false);
     setDeleteConfirmation("");
+    setDeleteError("");
   }, []);
 
   const openDeleteModal = () => {
     setDeleteConfirmation("");
+    setDeleteError("");
     setDeleteModalOpen(true);
   };
 
-  const confirmDeleteAccount = () => {
+  const confirmDeleteAccount = async () => {
     if (deleteConfirmation !== "DELETE") return;
-    closeDeleteModal();
-    setFeedback("회원 탈퇴 기능은 아직 연결되지 않았습니다.");
+    setDeleteLoading(true);
+    setDeleteError("");
+
+    try {
+      await withdraw();
+      clearSession();
+      closeDeleteModal();
+      navigate("/auth/login", {
+        replace: true,
+        state: { authFeedback: "회원 탈퇴가 완료되었습니다." },
+      });
+    } catch (error) {
+      setDeleteError(getApiErrorMessage(error, "회원 탈퇴에 실패했습니다."));
+      setDeleteLoading(false);
+    }
   };
+
+  const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const username = profileDraft.username.trim();
+
+    if (!username) {
+      setProfileError("사용자명을 입력해주세요.");
+      return;
+    }
+
+    setProfileSaving(true);
+    setProfileError("");
+
+    try {
+      const response = await updateMyInfo({
+        introduction: profileDraft.introduction,
+        username,
+      });
+      const nextProfile: MyInfoResponse = {
+        ...profile,
+        introduction: response.introduction,
+        loginId: profile?.loginId ?? sessionUser?.loginId ?? "",
+        profileImage: profile?.profileImage ?? sessionUser?.profileImage ?? "",
+        userId: response.userId,
+        username: response.username,
+      };
+      setProfile(nextProfile);
+      setProfileDraft({
+        introduction: response.introduction,
+        username: response.username,
+      });
+      updateSessionUser({
+        id: response.userId,
+        introduction: response.introduction,
+        loginId: nextProfile.loginId,
+        profileImage: nextProfile.profileImage,
+        username: response.username,
+      });
+      setProfileEditing(false);
+      setFeedback("프로필 정보가 저장되었습니다.");
+    } catch (error) {
+      setProfileError(getApiErrorMessage(error, "프로필 정보를 저장하지 못했습니다."));
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const cancelProfileEdit = () => {
+    setProfileDraft({
+      introduction: profile?.introduction ?? "",
+      username: profile?.username ?? "",
+    });
+    setProfileError("");
+    setProfileEditing(false);
+  };
+
+  const handleLogout = async () => {
+    setLogoutLoading(true);
+
+    try {
+      await logout();
+      navigate("/auth/login", {
+        replace: true,
+        state: { authFeedback: "로그아웃되었습니다." },
+      });
+    } catch (error) {
+      navigate("/auth/login", {
+        replace: true,
+        state: {
+          authFeedback: `${getApiErrorMessage(error, "서버 로그아웃 요청에 실패했습니다.")} 로컬 로그인 정보는 정리되었습니다.`,
+        },
+      });
+    }
+  };
+
+  const profileName = profile?.username ?? accountProfileMock.name;
+  const profileEmail = profile?.loginId ?? accountProfileMock.email;
+  const profileIntroduction = profile?.introduction || "소개가 등록되지 않았습니다.";
 
   return (
     <div className="account-settings-route">
       <TopBar
         onProfileFeedback={setFeedback}
-        user={accountProfileMock.name}
-        userEmail={accountProfileMock.email}
+        user={profileName}
+        userEmail={profileEmail}
       />
 
       <main className="account-settings">
@@ -96,20 +256,59 @@ export function AccountSettingsScreen() {
               <h2>프로필</h2>
               <div className="account-card__row account-profile-row">
                 <span aria-hidden="true" className="account-avatar account-avatar--large">
-                  {accountProfileMock.avatar}
+                  {profileName.slice(0, 1)}
                 </span>
                 <div className="account-card__copy">
-                  <h3>{accountProfileMock.name}</h3>
-                  <p>{accountProfileMock.email} · 가입일 {accountProfileMock.joinedAt}</p>
+                  <h3>{profileName}</h3>
+                  <p>{profileEmail}</p>
+                  <p>{profileIntroduction}</p>
                 </div>
                 <Button
-                  onClick={() => setFeedback("프로필 수정 기능은 아직 연결되지 않았습니다.")}
+                  disabled={profileLoading}
+                  onClick={() => {
+                    setProfileError("");
+                    setProfileEditing(true);
+                  }}
                   size="sm"
                   variant="secondary"
                 >
                   프로필 수정
                 </Button>
               </div>
+              {profileEditing ? (
+                <form className="account-profile-form" onSubmit={saveProfile}>
+                  <FormField
+                    errorMessage={!profileDraft.username.trim() ? profileError : undefined}
+                    id="account-profile-username"
+                    label="사용자명"
+                    onChange={(event) => {
+                      setProfileDraft((current) => ({ ...current, username: event.target.value }));
+                      setProfileError("");
+                    }}
+                    required
+                    value={profileDraft.username}
+                  />
+                  <label className="account-profile-form__introduction" htmlFor="account-profile-introduction">
+                    <span>소개</span>
+                    <textarea
+                      className="ui-input"
+                      id="account-profile-introduction"
+                      onChange={(event) => setProfileDraft((current) => ({
+                        ...current,
+                        introduction: event.target.value,
+                      }))}
+                      value={profileDraft.introduction}
+                    />
+                  </label>
+                  {profileError && profileDraft.username.trim() ? (
+                    <p className="account-profile-form__error" role="alert">{profileError}</p>
+                  ) : null}
+                  <div className="account-profile-form__actions">
+                    <Button disabled={profileSaving} onClick={cancelProfileEdit} variant="secondary">취소</Button>
+                    <Button loading={profileSaving} type="submit">저장</Button>
+                  </div>
+                </form>
+              ) : null}
             </section>
 
             <section className="account-card" id="account-security" tabIndex={-1}>
@@ -123,7 +322,8 @@ export function AccountSettingsScreen() {
               <AccountActionRow
                 action="로그아웃"
                 description="현재 기기를 포함해 로그인 상태를 관리합니다."
-                onClick={() => setFeedback("로그아웃 기능은 아직 연결되지 않았습니다.")}
+                loading={logoutLoading}
+                onClick={handleLogout}
                 title="로그인 세션"
               />
             </section>
@@ -169,15 +369,18 @@ export function AccountSettingsScreen() {
           <label htmlFor="account-delete-confirmation">계속하려면 DELETE를 입력하세요.</label>
           <Input
             autoComplete="off"
+            disabled={deleteLoading}
             id="account-delete-confirmation"
             onChange={(event) => setDeleteConfirmation(event.target.value)}
             placeholder="DELETE 입력"
             value={deleteConfirmation}
           />
+          {deleteError ? <p className="account-delete-dialog__error" role="alert">{deleteError}</p> : null}
           <div className="account-delete-dialog__actions">
-            <Button onClick={closeDeleteModal} variant="secondary">취소</Button>
+            <Button disabled={deleteLoading} onClick={closeDeleteModal} variant="secondary">취소</Button>
             <Button
               disabled={deleteConfirmation !== "DELETE"}
+              loading={deleteLoading}
               onClick={confirmDeleteAccount}
               variant="danger"
             >
@@ -193,11 +396,13 @@ export function AccountSettingsScreen() {
 function AccountActionRow({
   action,
   description,
+  loading = false,
   onClick,
   title,
 }: {
   action: string;
   description: string;
+  loading?: boolean;
   onClick: () => void;
   title: string;
 }) {
@@ -207,7 +412,7 @@ function AccountActionRow({
         <h3>{title}</h3>
         <p>{description}</p>
       </div>
-      <Button onClick={onClick} size="sm" variant="secondary">{action}</Button>
+      <Button loading={loading} onClick={onClick} size="sm" variant="secondary">{action}</Button>
     </div>
   );
 }

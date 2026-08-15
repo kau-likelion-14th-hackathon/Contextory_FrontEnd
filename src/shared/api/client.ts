@@ -40,16 +40,31 @@ export const apiConfig = {
 };
 
 export type AuthHeaderProvider = () => string | undefined;
+export type UnauthorizedHandler = () => Promise<string | undefined>;
 
 let authHeaderProvider: AuthHeaderProvider | undefined;
+let unauthorizedHandler: UnauthorizedHandler | undefined;
 
 export function setAuthHeaderProvider(provider: AuthHeaderProvider | undefined) {
   authHeaderProvider = provider;
 }
 
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | undefined) {
+  unauthorizedHandler = handler;
+}
+
 export type ApiRequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
   accessToken?: string;
+  authenticated?: boolean;
+  retryUnauthorized?: boolean;
+};
+
+export type ApiResponse<TResult> = {
+  isSuccess: boolean;
+  code: string;
+  message: string;
+  result: TResult;
 };
 
 export function getErrorKind(status: number): ApiErrorKind {
@@ -92,6 +107,11 @@ function buildUrl(path: string) {
   return `${API_BASE_URL}${path}`;
 }
 
+function getResponseMessage(body: unknown) {
+  if (!body || typeof body !== "object" || !("message" in body)) return undefined;
+  return typeof body.message === "string" ? body.message : undefined;
+}
+
 export async function requestJson<TResponse>(
   path: string,
   options: ApiRequestOptions = {},
@@ -103,19 +123,28 @@ export async function requestJson<TResponse>(
     );
   }
 
-  const headers = new Headers(options.headers);
+  const {
+    accessToken,
+    authenticated = true,
+    body: requestBody,
+    retryUnauthorized = true,
+    ...requestInit
+  } = options;
+  const headers = new Headers(requestInit.headers);
   headers.set("Accept", "application/json");
 
   let body: BodyInit | undefined;
 
-  if (options.body !== undefined) {
+  if (requestBody !== undefined) {
     headers.set("Content-Type", "application/json");
-    body = JSON.stringify(options.body);
+    body = JSON.stringify(requestBody);
   }
 
-  const authHeader = options.accessToken
-    ? `Bearer ${options.accessToken}`
-    : authHeaderProvider?.();
+  const authHeader = authenticated
+    ? accessToken
+      ? `Bearer ${accessToken}`
+      : authHeaderProvider?.()
+    : undefined;
 
   if (authHeader) {
     headers.set("Authorization", authHeader);
@@ -125,7 +154,8 @@ export async function requestJson<TResponse>(
 
   try {
     response = await fetch(buildUrl(path), {
-      ...options,
+      credentials: "include",
+      ...requestInit,
       headers,
       body,
     });
@@ -144,13 +174,34 @@ export async function requestJson<TResponse>(
   const responseText = await response.text();
   const responseJson = responseText ? parseJsonSafely(responseText) : undefined;
 
+  if (response.status === 401 && retryUnauthorized && unauthorizedHandler) {
+    let nextAccessToken: string | undefined;
+
+    try {
+      nextAccessToken = await unauthorizedHandler();
+    } catch {
+      nextAccessToken = undefined;
+    }
+
+    if (nextAccessToken) {
+      return requestJson<TResponse>(path, {
+        ...options,
+        accessToken: nextAccessToken,
+        retryUnauthorized: false,
+      });
+    }
+  }
+
   if (!response.ok) {
-    throw new ApiError(`Request failed with status ${response.status}.`, {
-      kind: getErrorKind(response.status),
-      status: response.status,
-      bodyText: responseText || undefined,
-      bodyJson: responseJson,
-    });
+    throw new ApiError(
+      getResponseMessage(responseJson) ?? `Request failed with status ${response.status}.`,
+      {
+        kind: getErrorKind(response.status),
+        status: response.status,
+        bodyText: responseText || undefined,
+        bodyJson: responseJson,
+      },
+    );
   }
 
   if (response.status === 204 || !responseText) {
@@ -158,4 +209,33 @@ export async function requestJson<TResponse>(
   }
 
   return responseJson as TResponse;
+}
+
+export async function requestApiResult<TResult>(
+  path: string,
+  options: ApiRequestOptions = {},
+) {
+  const response = await requestJson<ApiResponse<TResult>>(path, options);
+
+  if (!response?.isSuccess) {
+    throw new ApiError(response?.message || "API request failed.", {
+      kind: "unknown",
+      bodyJson: response,
+    });
+  }
+
+  return response.result;
+}
+
+export function getApiErrorMessage(error: unknown, fallback: string) {
+  if (!(error instanceof ApiError)) return fallback;
+
+  const responseMessage = getResponseMessage(error.bodyJson);
+  if (responseMessage) return responseMessage;
+  if (error.kind === "configuration") return "API 서버 주소가 설정되지 않았습니다.";
+  if (error.kind === "network") return "네트워크 연결을 확인한 뒤 다시 시도해주세요.";
+  if (error.kind === "server") return "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.";
+  if (error.kind === "unauthorized" || error.kind === "forbidden") return fallback;
+
+  return error.message === "API request failed." ? fallback : error.message;
 }

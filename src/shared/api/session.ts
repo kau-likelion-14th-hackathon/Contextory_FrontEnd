@@ -1,81 +1,135 @@
 import { setAuthHeaderProvider } from "./client";
 
-export type AuthUser = {
+const SESSION_KEY = "contextory.session";
+const SESSION_CHANGE_EVENT = "contextory:session-change";
+
+export type SessionUser = {
   id: number;
   loginId: string;
   username: string;
-  introduction?: string;
-  profileImage?: string;
+  introduction: string;
+  profileImage: string;
 };
 
-export type AuthResult = AuthUser & { accessToken: string };
-
-type SessionState = {
-  accessToken: string | null;
-  user: AuthUser | null;
+export type AuthSession = {
+  accessToken: string;
+  user?: SessionUser;
 };
 
-const STORAGE_KEY = "contextory.session";
-const EMPTY_STATE: SessionState = { accessToken: null, user: null };
+type SessionSource = "local" | "session";
+type StoredSession = { session: AuthSession; source: SessionSource };
 
-function readStorage(storage: Storage): SessionState | null {
+function getStorage(source: SessionSource) {
   try {
-    const raw = storage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as SessionState) : null;
+    return source === "local" ? window.localStorage : window.sessionStorage;
   } catch {
-    return null;
+    return undefined;
   }
 }
 
-function readStoredSession(): SessionState {
-  // "로그인 상태 유지"를 체크했으면 localStorage, 안 했으면 sessionStorage에 저장돼 있음
-  return readStorage(localStorage) ?? readStorage(sessionStorage) ?? EMPTY_STATE;
-}
-
-let state: SessionState = readStoredSession();
-
-function persist(remember: boolean) {
-  const target = remember ? localStorage : sessionStorage;
-  const other = remember ? sessionStorage : localStorage;
+function readSession(source: SessionSource): StoredSession | undefined {
+  const storage = getStorage(source);
+  if (!storage) return undefined;
 
   try {
-    target.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // 프라이빗 모드 등으로 저장소를 쓸 수 없는 경우 — 새로고침 시 로그인 상태만 유지 안 됨
-  }
+    const value = storage.getItem(SESSION_KEY);
+    if (!value) return undefined;
 
-  try {
-    other.removeItem(STORAGE_KEY);
+    const session = JSON.parse(value) as AuthSession;
+    return typeof session.accessToken === "string" && session.accessToken
+      ? { session, source }
+      : undefined;
   } catch {
-    // 반대쪽 저장소 정리는 실패해도 무시 — 주 저장(target)은 이미 성공했고,
-    // 여기서 에러가 난다는 건 그 저장소를 애초에 못 쓰는 환경이라 지울 것도 없었을 가능성이 높음
+    return undefined;
   }
 }
 
-export function setSession(result: AuthResult, remember = false) {
-  const { accessToken, ...user } = result;
-  state = { accessToken, user };
-  persist(remember);
+function writeSession(stored: StoredSession) {
+  const storage = getStorage(stored.source);
+  if (!storage) return;
+
+  try {
+    storage.setItem(SESSION_KEY, JSON.stringify(stored.session));
+  } catch {
+    // Storage를 사용할 수 없어도 현재 페이지의 메모리 세션은 유지합니다.
+  }
 }
 
-export function clearSession() {
-  state = EMPTY_STATE;
+function removeSession(source: SessionSource) {
+  const storage = getStorage(source);
+  if (!storage) return;
 
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    storage.removeItem(SESSION_KEY);
   } catch {
-    // 저장소 삭제가 실패해도 무시 — state는 위에서 이미 메모리상 초기화됐으므로 로그아웃 자체는 정상 처리됨
+    // Storage 정리 실패가 현재 페이지의 로그아웃을 막지 않게 합니다.
   }
+}
 
-  try {
-    sessionStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // 위와 동일한 이유로 무시
-  }
+let storedSession = readSession("local") ?? readSession("session");
+
+function notifySessionChange() {
+  window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));
+}
+
+export function setSession(session: AuthSession, persist: boolean) {
+  const source: SessionSource = persist ? "local" : "session";
+  storedSession = { session, source };
+
+  writeSession(storedSession);
+  removeSession(source === "local" ? "session" : "local");
+  notifySessionChange();
+}
+
+export function getSession() {
+  return storedSession?.session;
+}
+
+export function getCurrentUser() {
+  return getSession()?.user;
 }
 
 export function getAccessToken() {
-  return state.accessToken;
+  return getSession()?.accessToken;
 }
 
-setAuthHeaderProvider(() => (state.accessToken ? `Bearer ${state.accessToken}` : undefined));
+export function updateAccessToken(accessToken: string) {
+  storedSession = {
+    session: {
+      ...storedSession?.session,
+      accessToken,
+    },
+    source: storedSession?.source ?? "session",
+  };
+
+  writeSession(storedSession);
+  notifySessionChange();
+}
+
+export function updateSessionUser(user: SessionUser) {
+  if (!storedSession) return;
+
+  storedSession = {
+    ...storedSession,
+    session: { ...storedSession.session, user },
+  };
+  writeSession(storedSession);
+  notifySessionChange();
+}
+
+export function clearSession() {
+  storedSession = undefined;
+  removeSession("local");
+  removeSession("session");
+  notifySessionChange();
+}
+
+export function subscribeToSession(listener: () => void) {
+  window.addEventListener(SESSION_CHANGE_EVENT, listener);
+  return () => window.removeEventListener(SESSION_CHANGE_EVENT, listener);
+}
+
+setAuthHeaderProvider(() => {
+  const accessToken = getAccessToken();
+  return accessToken ? `Bearer ${accessToken}` : undefined;
+});

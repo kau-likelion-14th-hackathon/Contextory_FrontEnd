@@ -8,7 +8,7 @@ export const accountProfileMock = {
 export const connectedAccountMock = {
   provider: "GitHub",
   account: "hong-dev",
-  description: "로그인 수단으로 연결됨 · 프로젝트 저장소 연결과는 별도입니다.",
+  description: "프로젝트 저장소 연결에 사용하는 계정입니다.",
 };
 
 export const accountSections = [
