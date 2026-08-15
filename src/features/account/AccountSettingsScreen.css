@@ -203,6 +203,41 @@
   width: 48px;
 }
 
+.account-profile-form {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+}
+
+.account-profile-form__introduction {
+  color: var(--color-text-primary);
+  display: grid;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 6px;
+}
+
+.account-profile-form__introduction textarea {
+  min-height: 88px;
+  padding-block: 10px;
+  resize: vertical;
+}
+
+.account-profile-form__error,
+.account-delete-dialog__error {
+  color: var(--color-danger);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.account-profile-form__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .account-security-row {
   min-height: 52px;
 }

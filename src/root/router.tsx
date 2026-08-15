@@ -6,6 +6,7 @@ import { AuthScreen} from "../features/auth/AuthScreen";
 import { PasswordRecoveryScreen } from "../features/auth/PasswordRecoveryScreen";
 import { EmailVerificationScreen } from "../features/auth/EmailVerificationScreen";
 import { ProjectJoinScreen } from "../features/auth/ProjectJoinScreen";
+import { KakaoCallbackScreen } from "../features/auth/KakaoCallbackScreen";
 import { ProjectHomeScreen } from "../features/project/ProjectHomeScreen";
 import { GitHubWorkScreen } from "../features/github/GitHubWorkScreen";
 import { ProjectCreateScreen } from "../features/project/ProjectCreateScreen";
@@ -44,6 +45,10 @@ export const router = createBrowserRouter([
   {
     path: "/auth/verify-email",
     element: <EmailVerificationScreen /> // 이메일 인증화면
+  },
+  {
+    path: "/auth/kakao/callback",
+    element: <KakaoCallbackScreen />,
   },
   {
     path: "/invitations/:token",

@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { getApiErrorMessage } from "../../../../shared/api/client";
+import { logout } from "../../../auth/authApi";
 import "./ProfileMenu.css";
 
 type ProfileMenuProps = {
@@ -10,8 +12,10 @@ type ProfileMenuProps = {
 
 export function ProfileMenu({ email, name, onFeedback }: ProfileMenuProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [localFeedback, setLocalFeedback] = useState("");
+  const [logoutLoading, setLogoutLoading] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLElement>(null);
@@ -56,6 +60,28 @@ export function ProfileMenu({ email, name, onFeedback }: ProfileMenuProps) {
 
   const closeMenu = () => setOpen(false);
 
+  const handleLogout = async () => {
+    setLogoutLoading(true);
+    closeMenu();
+
+    try {
+      await logout();
+      navigate("/auth/login", {
+        replace: true,
+        state: { authFeedback: "로그아웃되었습니다." },
+      });
+    } catch (error) {
+      const message = `${getApiErrorMessage(error, "서버 로그아웃 요청에 실패했습니다.")} 로컬 로그인 정보는 정리되었습니다.`;
+      notify(message);
+      navigate("/auth/login", {
+        replace: true,
+        state: {
+          authFeedback: message,
+        },
+      });
+    }
+  };
+
   return (
     <div className="profile-menu" ref={rootRef}>
       <button
@@ -94,10 +120,8 @@ export function ProfileMenu({ email, name, onFeedback }: ProfileMenuProps) {
             <li>
               <button
                 className="profile-menu__logout"
-                onClick={() => {
-                  closeMenu();
-                  notify("로그아웃 기능은 아직 연결되지 않았습니다.");
-                }}
+                disabled={logoutLoading}
+                onClick={handleLogout}
                 type="button"
               >
                 로그아웃

@@ -1,7 +1,11 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { getApiErrorMessage } from "../../shared/api/client";
+import { setSession } from "../../shared/api/session";
 import { AuthLayout } from "../../shared/layouts";
 import { Button, FormField, Tabs } from "../../shared/ui";
+import { login, signup, toAuthSession } from "./authApi";
+import { startKakaoAuthorization } from "./kakaoAuth";
 import "./Auth.css";
 
 export type AuthMode = "login" | "signup";
@@ -11,8 +15,13 @@ type AuthErrors = Partial<Record<"name" | "email" | "password" | "passwordConfir
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_MISMATCH_ERROR = "비밀번호가 일치하지 않습니다.";
 
+type AuthLocationState = {
+  authFeedback?: unknown;
+};
+
 export function AuthScreen({ mode }: { mode: AuthMode }) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -22,12 +31,16 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<AuthErrors>({});
+  const [feedback, setFeedback] = useState(() => {
+    const locationFeedback = (location.state as AuthLocationState | null)?.authFeedback;
+    return typeof locationFeedback === "string" ? locationFeedback : "";
+  });
 
   function handleTabChange(id: string) {
     navigate(id === "login" ? "/auth/login" : "/auth/signup");
   }
 
-  function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     const nextErrors: AuthErrors = {};
 
@@ -58,9 +71,36 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
       return;
     }
 
-    // TODO: 명세 확정되면 실제 요청으로 교체
     setLoading(true);
-    navigate("/projects");
+    setFeedback("");
+
+    try {
+      const response = mode === "login"
+        ? await login({ loginId: email.trim(), password })
+        : await signup({
+            introduction: "",
+            loginId: email.trim(),
+            password,
+            username: name.trim(),
+          });
+
+      setSession(toAuthSession(response), mode === "login" && keepSignedIn);
+      navigate("/projects", { replace: true });
+    } catch (error) {
+      const fallback = mode === "login"
+        ? "이메일 또는 비밀번호를 확인해주세요."
+        : "회원가입에 실패했습니다.";
+      setFeedback(getApiErrorMessage(error, fallback));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleKakaoLogin() {
+    setFeedback("");
+    if (!startKakaoAuthorization(mode === "login" && keepSignedIn)) {
+      setFeedback("카카오 로그인을 시작하려면 OAuth 환경설정이 필요합니다.");
+    }
   }
 
   return (
@@ -90,6 +130,8 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
               : "Contextory 계정으로 프로젝트 맥락을 관리하세요."}
           </p>
         </div>
+
+        <p aria-live="polite" className="auth-card__feedback">{feedback}</p>
 
         <Tabs
           ariaLabel="인증 방식 선택"
@@ -212,8 +254,8 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
           <span>또는</span>
         </div>
 
-        <Button fullWidth variant="secondary">
-          GitHub로 계속하기
+        <Button disabled={loading} fullWidth onClick={handleKakaoLogin} variant="secondary">
+          카카오로 계속하기
         </Button>
 
         <p className="auth-card__switch">
@@ -236,8 +278,8 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
             </>
           ) : (
             <>
-              <strong>GitHub 로그인과 저장소 연결은 별개입니다.</strong>
-              <p>GitHub는 로그인 수단으로 연결할 수 있고, 프로젝트 저장소는 생성 과정에서 따로 연결합니다.</p>
+              <strong>카카오 로그인과 GitHub 저장소 연결은 별개입니다.</strong>
+              <p>카카오는 로그인 수단이며, 프로젝트 저장소는 생성 과정에서 별도로 연결합니다.</p>
             </>
           )}
         </div>
