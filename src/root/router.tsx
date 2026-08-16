@@ -47,7 +47,7 @@ export const router = createBrowserRouter([
     element: <EmailVerificationScreen /> // 이메일 인증화면
   },
   {
-    path: "/auth/kakao/callback",
+    path: "/login/oauth2/code/kakao",
     element: <KakaoCallbackScreen />,
   },
   {
