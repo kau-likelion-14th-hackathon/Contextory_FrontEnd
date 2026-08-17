@@ -8,11 +8,11 @@ export type ProjectCardProps = {
   name: string;
   description?: string;
   role?: string;
-  plan?: string;
+  plan?: string | null;
   repositoryConnected?: boolean;
   approvedRecords?: number;
   pendingTasks?: number;
-  creditBalance?: number;
+  creditBalance?: number | null;
   creditsUsed?: number;
   creditsTotal?: number;
   members?: string[];
@@ -24,9 +24,11 @@ export function ProjectCard({
   creditBalance, creditsUsed, creditsTotal, members,
 }: ProjectCardProps) {
   const hasProjectInfo = role !== undefined || plan !== undefined || repositoryConnected !== undefined;
+  const showCreditBalance = creditBalance !== undefined
+    || (repositoryConnected !== undefined && creditsUsed === undefined && creditsTotal === undefined);
   const hasProjectStats = approvedRecords !== undefined
     || pendingTasks !== undefined
-    || creditBalance !== undefined
+    || showCreditBalance
     || (creditsUsed !== undefined && creditsTotal !== undefined);
 
   return (
@@ -42,7 +44,10 @@ export function ProjectCard({
       {hasProjectInfo ? (
         <dl className="project-card__info-list">
           {role !== undefined ? <div><dt>내 역할</dt><dd>{role}</dd></div> : null}
-          {plan !== undefined ? <div><dt>플랜</dt><dd><Badge variant="success">{plan}</Badge></dd></div> : null}
+          <div>
+            <dt>플랜</dt>
+            <dd>{plan == null ? "—" : <Badge variant="success">{plan}</Badge>}</dd>
+          </div>
           {repositoryConnected !== undefined ? (
             <div>
               <dt>저장소 연결</dt>
@@ -58,7 +63,12 @@ export function ProjectCard({
         <div className="project-card__stats">
           {approvedRecords !== undefined ? <div><span>승인된 기록</span><strong>{approvedRecords.toLocaleString()}</strong></div> : null}
           {pendingTasks !== undefined ? <div><span>대기 중 작업</span><strong>{pendingTasks}</strong></div> : null}
-          {creditBalance !== undefined ? <div><span>잔여 크레딧</span><strong>{creditBalance.toLocaleString()}</strong></div> : null}
+          {showCreditBalance ? (
+            <div>
+              <span>잔여 크레딧</span>
+              <strong>{typeof creditBalance === "number" ? creditBalance.toLocaleString() : "—"}</strong>
+            </div>
+          ) : null}
           {creditsUsed !== undefined && creditsTotal !== undefined ? (
             <div>
               <span>크레딧 사용량</span>

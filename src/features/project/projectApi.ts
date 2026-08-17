@@ -8,8 +8,8 @@ export type ProjectSummaryResponse = {
   name: string;
   myPermissionRole: string;
   repositoryConnected: boolean;
-  planName: string;
-  creditBalance: number;
+  planName: string | null;
+  creditBalance: number | null;
 };
 
 export type ProjectListResponse = {

@@ -19,17 +19,26 @@ describe("project API", () => {
       isSuccess: true,
       message: "success",
       result: {
-        content: [],
+        content: [{
+          creditBalance: null,
+          myPermissionRole: "OWNER",
+          name: "Contextory Web",
+          planName: null,
+          projectId: 1,
+          repositoryConnected: false,
+        }],
         hasNext: false,
         page: 1,
         size: 3,
-        totalElements: 0,
+        totalElements: 4,
       },
     }));
     vi.stubGlobal("fetch", fetchMock);
     const { getProjects } = await loadProjectApi();
 
-    await getProjects({ size: 3, status: "ACTIVE", uiPage: 2 });
+    await expect(getProjects({ size: 3, status: "ACTIVE", uiPage: 2 })).resolves.toMatchObject({
+      content: [{ creditBalance: null, planName: null }],
+    });
 
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.test/api/projects?page=1&size=3&status=ACTIVE",
