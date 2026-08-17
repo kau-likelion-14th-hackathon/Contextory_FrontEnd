@@ -1,32 +1,56 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
+import { getApiErrorMessage } from "../../shared/api/client";
 import { PageContainer } from "../../shared/layouts";
 import {
   Badge,
   Button,
   ConfirmDialog,
+  ErrorState,
   FormField,
   Input,
+  LoadingState,
   Modal,
   Tabs,
   type TabItem,
 } from "../../shared/ui";
 import {
   githubConnectionMock,
-  projectSettingsMetadataMock,
-  projectSettingsMock,
   repositoryScopeMock,
   syncStatusMock,
   teamMembersMock,
   teamSeatsMock,
-  type ProjectSettingsFormValue,
   type TeamMemberViewModel,
 } from "./teamProjectSettingsMock";
+import {
+  deleteProject,
+  updateProject,
+  type ProjectDetailResponse,
+  type ProjectLanguage,
+  type UpdateProjectRequest,
+} from "../project/projectApi";
+import type { ProjectWorkspaceContextValue } from "../workspace/WorkspaceShell";
 import { BillingSettingsPanel, stateDescriptions } from "./BillingSettingsPanel";
 import { isBillingViewState } from "./billingSettingsMock";
 import "./TeamProjectSettingsScreen.css";
 
 type SettingsTab = "project" | "github" | "members" | "billing";
+
+type ProjectSettingsFormValue = {
+  name: string;
+  summary: string;
+  purpose: string;
+  defaultLanguage: ProjectLanguage | "";
+};
+
+function toProjectSettingsForm(project: ProjectDetailResponse): ProjectSettingsFormValue {
+  return {
+    defaultLanguage: project.defaultLanguage ?? "",
+    name: project.name,
+    purpose: project.purpose ?? "",
+    summary: project.summary ?? "",
+  };
+}
 
 const settingsTabs: TabItem[] = [
   { id: "project", label: "프로젝트 정보" },
@@ -116,36 +140,130 @@ export function TeamProjectSettingsScreen() {
 }
 
 function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => void }) {
-  const [formValue, setFormValue] = useState<ProjectSettingsFormValue>(() => ({
-    ...projectSettingsMock,
-  }));
+  const navigate = useNavigate();
+  const {
+    project,
+    projectError,
+    projectLoading,
+    reloadProject,
+    setProjectDetail,
+  } = useOutletContext<ProjectWorkspaceContextValue>();
+  const [formValue, setFormValue] = useState<ProjectSettingsFormValue>();
+  const [saving, setSaving] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  useEffect(() => {
+    if (project) setFormValue(toProjectSettingsForm(project));
+  }, [project]);
 
   const updateField = (field: keyof ProjectSettingsFormValue, value: string) => {
-    setFormValue((current) => ({ ...current, [field]: value }));
+    setFormValue((current) => current ? { ...current, [field]: value } : current);
   };
 
   const resetForm = () => {
-    setFormValue({ ...projectSettingsMock });
+    if (!project) return;
+    setFormValue(toProjectSettingsForm(project));
     onFeedback("프로젝트 정보 변경을 취소했습니다.");
   };
 
-  const saveForm = (event: FormEvent<HTMLFormElement>) => {
+  const saveForm = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onFeedback("프로젝트 정보를 저장했습니다. 실제 서버에는 반영되지 않습니다.");
+    if (!project || !formValue || saving) return;
+
+    const name = formValue.name.trim();
+    if (!name) {
+      onFeedback("프로젝트 이름을 입력해주세요.");
+      return;
+    }
+
+    const body: UpdateProjectRequest = {};
+    if (name !== project.name) body.name = name;
+    if (formValue.summary !== (project.summary ?? "")) body.summary = formValue.summary;
+    if (formValue.purpose !== (project.purpose ?? "")) body.purpose = formValue.purpose;
+    if (formValue.defaultLanguage && formValue.defaultLanguage !== project.defaultLanguage) {
+      body.defaultLanguage = formValue.defaultLanguage;
+    }
+
+    if (Object.keys(body).length === 0) {
+      onFeedback("변경된 프로젝트 정보가 없습니다.");
+      return;
+    }
+
+    setSaving(true);
+    onFeedback("");
+
+    try {
+      const response = await updateProject(project.projectId, body);
+      const nextProject: ProjectDetailResponse = {
+        ...project,
+        ...body,
+        name: response.name,
+        status: response.status,
+      };
+      setProjectDetail(nextProject);
+      setFormValue(toProjectSettingsForm(nextProject));
+      const refreshedProject = await reloadProject();
+      if (refreshedProject) {
+        setFormValue(toProjectSettingsForm(refreshedProject));
+        onFeedback("프로젝트 정보를 저장했습니다.");
+      } else {
+        onFeedback("프로젝트 정보는 저장했지만 최신 정보를 다시 불러오지 못했습니다.");
+      }
+    } catch (error) {
+      onFeedback(getApiErrorMessage(error, "프로젝트 정보를 저장하지 못했습니다."));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const closeDeleteDialog = useCallback(() => {
+    if (deleting) return;
     setDeleteDialogOpen(false);
     setDeleteConfirmation("");
-  }, []);
+    setDeleteError("");
+  }, [deleting]);
 
-  const confirmDelete = () => {
-    if (deleteConfirmation !== projectSettingsMock.name) return;
-    closeDeleteDialog();
-    onFeedback("프로젝트 삭제 확인을 완료했습니다. 실제 프로젝트는 삭제되지 않았습니다.");
+  const confirmDelete = async () => {
+    if (!project || deleteConfirmation !== project.name || deleting) return;
+    setDeleting(true);
+    setDeleteError("");
+
+    try {
+      await deleteProject(project.projectId);
+      navigate("/projects", { replace: true });
+    } catch (error) {
+      const message = getApiErrorMessage(error, "프로젝트를 삭제하지 못했습니다.");
+      setDeleteError(message);
+      onFeedback(message);
+      setDeleting(false);
+    }
   };
+
+  if (projectLoading && !project) {
+    return (
+      <section aria-label="프로젝트 정보 설정" role="tabpanel">
+        <LoadingState
+          description="프로젝트 설정에 필요한 정보를 가져오고 있습니다."
+          title="프로젝트 정보를 불러오는 중입니다"
+        />
+      </section>
+    );
+  }
+
+  if (!project || !formValue) {
+    return (
+      <section aria-label="프로젝트 정보 설정" role="tabpanel">
+        <ErrorState
+          action={{ label: "다시 불러오기", onClick: () => void reloadProject() }}
+          description={projectError || "프로젝트 정보를 확인할 수 없습니다."}
+          title="프로젝트 정보를 불러오지 못했습니다"
+        />
+      </section>
+    );
+  }
 
   return (
     <section
@@ -159,24 +277,42 @@ function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => voi
           title="프로젝트 정보"
         />
         <FormField
+          disabled={saving}
           label="프로젝트 이름"
+          maxLength={150}
           onChange={(event) => updateField("name", event.target.value)}
           value={formValue.name}
         />
         <FormField
+          disabled={saving}
           label="한 줄 설명"
+          maxLength={500}
           onChange={(event) => updateField("summary", event.target.value)}
           value={formValue.summary}
         />
         <FormField
+          disabled={saving}
           label="프로젝트 목적"
           onChange={(event) => updateField("purpose", event.target.value)}
           value={formValue.purpose}
         />
-        <FormField label="기본 언어" readOnly value={formValue.language} />
+        <div className="form-field">
+          <label className="form-field__label" htmlFor="project-default-language">기본 언어</label>
+          <select
+            className="ui-input"
+            disabled={saving}
+            id="project-default-language"
+            onChange={(event) => updateField("defaultLanguage", event.target.value)}
+            value={formValue.defaultLanguage}
+          >
+            <option disabled value="">언어 정보 없음</option>
+            <option value="ko">한국어</option>
+            <option value="en">English</option>
+          </select>
+        </div>
         <div className="settings-actions settings-actions--end">
-          <Button onClick={resetForm} variant="secondary">변경 취소</Button>
-          <Button type="submit">변경사항 저장</Button>
+          <Button disabled={saving} onClick={resetForm} variant="secondary">변경 취소</Button>
+          <Button loading={saving} type="submit">변경사항 저장</Button>
         </div>
       </form>
 
@@ -184,12 +320,10 @@ function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => voi
         <section className="settings-card settings-metadata">
           <h2>프로젝트 메타 정보</h2>
           <dl>
-            {projectSettingsMetadataMock.map((item) => (
-              <div key={item.label}>
-                <dt>{item.label}</dt>
-                <dd>{item.value}</dd>
-              </div>
-            ))}
+            <div><dt>프로젝트 ID</dt><dd>{project.projectId}</dd></div>
+            <div><dt>프로젝트 식별자</dt><dd>{project.slug || "—"}</dd></div>
+            <div><dt>상태</dt><dd>{project.status}</dd></div>
+            <div><dt>내 권한</dt><dd>{project.myPermissionRole}</dd></div>
           </dl>
         </section>
 
@@ -197,20 +331,22 @@ function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => voi
           <h2>Danger Zone</h2>
           <h3>프로젝트 삭제</h3>
           <p>
-            프로젝트 기록과 팀원 연결, GitHub 연동 정보를 영구 삭제합니다.
-            삭제 전 프로젝트명 재입력이 필요합니다.
+            프로젝트 삭제를 서버에 요청합니다. 삭제 전 프로젝트명 재입력이 필요합니다.
           </p>
-          <Button onClick={() => setDeleteDialogOpen(true)} variant="danger">
+          <Button onClick={() => {
+            setDeleteDialogOpen(true);
+            setDeleteError("");
+          }} variant="danger">
             프로젝트 삭제
           </Button>
         </section>
       </div>
 
       <Modal
-        description="프로젝트 기록, 팀원 연결, GitHub 연동 정보가 삭제됩니다. 이 작업은 복구할 수 없습니다."
+        description="프로젝트 삭제 후 처리 방식은 서버 정책을 따릅니다. 계속하려면 실제 프로젝트명을 확인해주세요."
         onClose={closeDeleteDialog}
         open={deleteDialogOpen}
-        title="프로젝트를 영구 삭제하시겠어요?"
+        title="프로젝트를 삭제하시겠어요?"
       >
         <div className="settings-delete-dialog">
           <label htmlFor="project-delete-confirmation">
@@ -220,13 +356,16 @@ function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => voi
             autoComplete="off"
             id="project-delete-confirmation"
             onChange={(event) => setDeleteConfirmation(event.target.value)}
-            placeholder="Contextory Web 입력"
+            disabled={deleting}
+            placeholder={`${project.name} 입력`}
             value={deleteConfirmation}
           />
+          {deleteError ? <p className="form-field__error" role="alert">{deleteError}</p> : null}
           <div className="settings-actions settings-actions--end">
-            <Button onClick={closeDeleteDialog} variant="secondary">취소</Button>
+            <Button disabled={deleting} onClick={closeDeleteDialog} variant="secondary">취소</Button>
             <Button
-              disabled={deleteConfirmation !== projectSettingsMock.name}
+              disabled={deleteConfirmation !== project.name}
+              loading={deleting}
               onClick={confirmDelete}
               variant="danger"
             >
