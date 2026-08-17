@@ -1,15 +1,3 @@
-export type ProjectSettingsFormValue = {
-  name: string;
-  summary: string;
-  purpose: string;
-  language: string;
-};
-
-export type ProjectSettingsMetadataItem = {
-  label: string;
-  value: string;
-};
-
 export type GitHubConnectionViewModel = {
   account: string;
   repository: string;
@@ -34,20 +22,6 @@ export type TeamMemberViewModel = {
   permission: string;
   currentUser?: boolean;
 };
-
-export const projectSettingsMock: ProjectSettingsFormValue = {
-  name: "Contextory Web",
-  summary: "GitHub 변경을 팀의 프로젝트 맥락으로 연결하는 협업 도구",
-  purpose: "변경 이유와 역할별 영향을 팀이 빠르게 이해하도록 지원",
-  language: "한국어",
-};
-
-export const projectSettingsMetadataMock: ProjectSettingsMetadataItem[] = [
-  { label: "생성일", value: "2026.07.30" },
-  { label: "관리자", value: "홍길동" },
-  { label: "팀원", value: "8명" },
-  { label: "프로젝트 ID", value: "CTX-WEB-01" },
-];
 
 export const githubConnectionMock: GitHubConnectionViewModel = {
   account: "hong-dev",

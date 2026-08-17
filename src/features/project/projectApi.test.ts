@@ -46,6 +46,81 @@ describe("project API", () => {
     );
   });
 
+  it("returns a nullable project detail from the common API envelope", async () => {
+    const detail = {
+      defaultLanguage: null,
+      myPermissionRole: "OWNER",
+      name: "Contextory Web",
+      projectId: 37,
+      purpose: null,
+      repository: {
+        connected: false,
+        repositoryFullName: null,
+      },
+      slug: "contextory-web",
+      status: "ACTIVE",
+      subscription: {
+        creditBalance: null,
+        planName: null,
+      },
+      summary: null,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      code: "SUCCESS",
+      isSuccess: true,
+      message: "success",
+      result: detail,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { getProject } = await loadProjectApi();
+
+    await expect(getProject(37)).resolves.toEqual(detail);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.test/api/projects/37",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("sends a partial project update to the project path", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      code: "SUCCESS",
+      isSuccess: true,
+      message: "success",
+      result: {
+        name: "Contextory Web Updated",
+        projectId: 37,
+        status: "ACTIVE",
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { updateProject } = await loadProjectApi();
+    const body = { name: "Contextory Web Updated", summary: "변경된 설명" };
+
+    await expect(updateProject(37, body)).resolves.toMatchObject({ projectId: 37 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.test/api/projects/37",
+      expect.objectContaining({ body: JSON.stringify(body), method: "PATCH" }),
+    );
+  });
+
+  it("deletes the project through the project path", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      code: "SUCCESS",
+      isSuccess: true,
+      message: "success",
+      result: null,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { deleteProject } = await loadProjectApi();
+
+    await expect(deleteProject(37)).resolves.toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.test/api/projects/37",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
   it("sends only fields defined by the Swagger create project request", async () => {
     const fetchMock = vi.fn().mockResolvedValue(Response.json({
       code: "SUCCESS",
