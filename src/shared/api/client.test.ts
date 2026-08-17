@@ -34,6 +34,24 @@ describe("requestJson", () => {
     await expect(requestJson("/empty")).resolves.toBeUndefined();
   });
 
+  it("includes credentials by default and preserves an explicit override", async () => {
+    const { requestJson } = await loadClient();
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(Response.json({ ok: true })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await requestJson("/default-credentials");
+    await requestJson("/explicit-credentials", { credentials: "omit" });
+
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ credentials: "include" }),
+    );
+    expect(fetchMock.mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({ credentials: "omit" }),
+    );
+  });
+
   it("preserves non-json error body text", async () => {
     const { ApiError, requestJson } = await loadClient();
     vi.stubGlobal(
@@ -111,5 +129,22 @@ describe("requestJson", () => {
       RequestInit & { headers: Headers },
     ];
     expect(init.headers.get("Authorization")).toBe("Bearer test-token");
+  });
+
+  it("reissues once after a 401 and retries with the new access token", async () => {
+    const { requestJson, setUnauthorizedHandler } = await loadClient();
+    const unauthorizedHandler = vi.fn().mockResolvedValue("fresh-token");
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ message: "expired" }, { status: 401 }))
+      .mockResolvedValueOnce(Response.json({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    setUnauthorizedHandler(unauthorizedHandler);
+
+    await expect(requestJson<{ ok: boolean }>("/secure")).resolves.toEqual({ ok: true });
+
+    expect(unauthorizedHandler).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const secondRequest = fetchMock.mock.calls[1]?.[1] as RequestInit & { headers: Headers };
+    expect(secondRequest.headers.get("Authorization")).toBe("Bearer fresh-token");
   });
 });
