@@ -24,9 +24,9 @@ describe("GitHub repository API", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { getGitHubConnectUrl } = await loadGitHubRepositoryApi();
 
-    await expect(getGitHubConnectUrl()).resolves.toEqual(result);
+    await expect(getGitHubConnectUrl(39)).resolves.toEqual(result);
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.test/api/github/connect",
+      "https://api.test/api/github/connect?projectId=39",
       expect.objectContaining({ method: "GET" }),
     );
   });

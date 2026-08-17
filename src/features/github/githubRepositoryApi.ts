@@ -49,8 +49,10 @@ export type ConnectProjectRepositoryRequest = {
   repositoryFullName: string;
 };
 
-export function getGitHubConnectUrl() {
-  return requestApiResult<GitHubConnectResponse>("/api/github/connect", {
+export function getGitHubConnectUrl(projectId: string | number) {
+  const searchParams = new URLSearchParams({ projectId: String(projectId) });
+
+  return requestApiResult<GitHubConnectResponse>(`/api/github/connect?${searchParams}`, {
     method: "GET",
   });
 }

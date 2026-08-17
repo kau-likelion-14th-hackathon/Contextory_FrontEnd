@@ -470,12 +470,12 @@ function GitHubRepositoryPanel({ onFeedback }: { onFeedback: (message: string) =
   }, [repositoryDialogOpen, repositoryListRetryKey, repositoryPage]);
 
   const startGitHubConnection = async () => {
-    if (connectingGitHub) return;
+    if (connectingGitHub || !projectId) return;
     setConnectingGitHub(true);
     onFeedback("");
 
     try {
-      const { installUrl } = await getGitHubConnectUrl();
+      const { installUrl } = await getGitHubConnectUrl(projectId);
       window.location.assign(installUrl);
     } catch (error) {
       onFeedback(getApiErrorMessage(error, "GitHub 연결을 시작하지 못했습니다."));
