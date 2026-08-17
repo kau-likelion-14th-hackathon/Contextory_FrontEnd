@@ -31,7 +31,6 @@ export const projectRoleOptions: ProjectRole[] = [
 export const projectLanguageOptions = [
   "한국어",
   "English",
-  "日本語",
 ] as const;
 
 export const repositoryOptions: RepositoryOption[] = [

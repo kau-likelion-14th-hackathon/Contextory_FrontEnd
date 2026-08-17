@@ -1,89 +1,60 @@
-import { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { getApiErrorMessage } from "../../shared/api/client";
 import { PageContainer, ResponsiveGrid } from "../../shared/layouts";
-import { EmptyState, Pagination, SearchInput } from "../../shared/ui";
+import { EmptyState, ErrorState, LoadingState, Pagination, SearchInput } from "../../shared/ui";
 import { TopBar } from "../workspace/components/TopBar";
 import { ProjectCard } from "./components";
 import {
-  DEFAULT_PROJECT_SELECT_STATE,
-  DEFAULT_PROJECT_SORT_OPTION,
-  DEFAULT_PROJECT_STATUS_OPTION,
-  projectSelectMock,
-  projectSortOptions,
-  projectStatusOptions,
-  type ProjectSelectViewState,
-  type ProjectSortOption,
-  type ProjectStatusOption,
-} from "./projectSelectMock";
+  getProjects,
+  type ProjectListResponse,
+} from "./projectApi";
 import "./ProjectSelectScreen.css";
 
-const viewStates: ProjectSelectViewState[] = ["success", "empty"];
 const PAGE_SIZE = 3;
-
-function isProjectSelectViewState(value: string | null): value is ProjectSelectViewState {
-  return value !== null && viewStates.includes(value as ProjectSelectViewState);
-}
+const projectStatusOptions = ["전체 상태", "연결됨", "연결 안됨"] as const;
+type RequestState = "loading" | "success" | "error";
 
 export function ProjectSelectScreen() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const stateParam = searchParams.get("state");
-  const viewState = isProjectSelectViewState(stateParam) ? stateParam : DEFAULT_PROJECT_SELECT_STATE;
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortOption, setSortOption] = useState<ProjectSortOption>(DEFAULT_PROJECT_SORT_OPTION);
-  const [statusOption, setStatusOption] = useState<ProjectStatusOption>(DEFAULT_PROJECT_STATUS_OPTION);
   const [currentPage, setCurrentPage] = useState(1);
+  const [requestState, setRequestState] = useState<RequestState>("loading");
+  const [projectList, setProjectList] = useState<ProjectListResponse>();
+  const [errorMessage, setErrorMessage] = useState("");
+  const [retryKey, setRetryKey] = useState(0);
 
-  const filteredProjects = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLocaleLowerCase("ko-KR");
+  useEffect(() => {
+    const controller = new AbortController();
+    setRequestState("loading");
+    setErrorMessage("");
 
-    return projectSelectMock
-      .filter((project) => project.name.toLocaleLowerCase("ko-KR").includes(normalizedSearch))
-      .filter((project) => {
-        if (statusOption === "연결됨") return project.repositoryConnected;
-        if (statusOption === "연결 안됨") return !project.repositoryConnected;
-        return true;
+    getProjects(
+      { size: PAGE_SIZE, status: "ACTIVE", uiPage: currentPage },
+      controller.signal,
+    )
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        const totalPages = Math.max(1, Math.ceil(result.totalElements / result.size));
+        if (result.totalElements > 0 && currentPage > totalPages) {
+          setCurrentPage(totalPages);
+          return;
+        }
+        setProjectList(result);
+        setRequestState("success");
       })
-      .sort((left, right) => {
-        const direction = sortOption === "최근 활동 순" ? -1 : 1;
-        return left.lastActivityAt.localeCompare(right.lastActivityAt) * direction;
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setErrorMessage(getApiErrorMessage(error, "프로젝트 목록을 불러오지 못했습니다."));
+        setRequestState("error");
       });
-  }, [searchTerm, sortOption, statusOption]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredProjects.length / PAGE_SIZE));
-  const pageProjects = filteredProjects.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE,
-  );
-  const isProjectsEmpty = viewState === "empty";
-  const isSearchEmpty = !isProjectsEmpty && filteredProjects.length === 0;
-  const emptyResultDescription = searchTerm.trim()
-    ? `"${searchTerm.trim()}"와 일치하는 프로젝트가 없습니다. 다른 검색어나 필터를 사용해보세요.`
-    : "선택한 필터와 일치하는 프로젝트가 없습니다. 다른 조건을 사용해보세요.";
+    return () => controller.abort();
+  }, [currentPage, retryKey]);
 
-  function updateSearchTerm(value: string) {
-    setSearchTerm(value);
-    setCurrentPage(1);
-  }
-
-  function updateSortOption(value: ProjectSortOption) {
-    setSortOption(value);
-    setCurrentPage(1);
-  }
-
-  function updateStatusOption(value: ProjectStatusOption) {
-    setStatusOption(value);
-    setCurrentPage(1);
-  }
-
-  function resetFilters() {
-    setSearchTerm("");
-    setSortOption(DEFAULT_PROJECT_SORT_OPTION);
-    setStatusOption(DEFAULT_PROJECT_STATUS_OPTION);
-    setCurrentPage(1);
-  }
+  const totalPages = projectList
+    ? Math.max(1, Math.ceil(projectList.totalElements / projectList.size))
+    : 1;
+  const isProjectsEmpty = projectList?.totalElements === 0;
 
   return (
     <main className="project-select">
@@ -104,56 +75,69 @@ export function ProjectSelectScreen() {
 
           <div className="project-select__toolbar">
             <SearchInput
-              aria-label="프로젝트 이름으로 검색"
-              onChange={(event) => updateSearchTerm(event.target.value)}
-              onClear={() => updateSearchTerm("")}
+              aria-describedby="project-select-filter-scope"
+              aria-label="프로젝트 이름 검색 준비 중"
+              disabled
               placeholder="프로젝트 이름으로 검색"
-              value={searchTerm}
+              value=""
             />
             <div className="project-select__toolbar-actions">
               <label className="project-select__visually-hidden" htmlFor="project-select-status">
                 저장소 연결 상태
               </label>
               <select
+                aria-describedby="project-select-filter-scope"
+                disabled
                 id="project-select-status"
-                onChange={(event) => updateStatusOption(event.target.value as ProjectStatusOption)}
-                value={statusOption}
+                value="전체 상태"
               >
                 {projectStatusOptions.map((option) => <option key={option}>{option}</option>)}
               </select>
               <label className="project-select__visually-hidden" htmlFor="project-select-sort">
                 프로젝트 정렬
               </label>
-              <select
-                id="project-select-sort"
-                onChange={(event) => updateSortOption(event.target.value as ProjectSortOption)}
-                value={sortOption}
-              >
-                {projectSortOptions.map((option) => <option key={option}>{option}</option>)}
+              <select disabled id="project-select-sort" value="서버 기본 순서">
+                <option>서버 기본 순서</option>
               </select>
             </div>
           </div>
 
-            {isProjectsEmpty ? (
-            <EmptyState
-                icon={<span aria-hidden="true" className="project-select__empty-icon" />}
-                action={{ label: "새 프로젝트 만들기", onClick: () => navigate("/projects/new") }}
-                description="새 프로젝트를 만들거나 초대 링크를 통해 팀 프로젝트에 참여할 수 있습니다."
-                title="아직 참여 중인 프로젝트가 없어요"
+          <p className="project-select__filter-scope" id="project-select-filter-scope">
+            서버 검색 및 저장소 연결 필터 API가 아직 제공되지 않아 현재 사용할 수 없습니다.
+          </p>
+
+          {requestState === "loading" ? (
+            <LoadingState
+              description="참여 중인 프로젝트 정보를 가져오고 있습니다."
+              title="프로젝트 목록을 불러오는 중입니다"
             />
-            ) : isSearchEmpty ? (
-            <EmptyState
-                icon={<span aria-hidden="true" className="project-select__empty-icon" />}
-                action={{ label: "검색 조건 초기화", onClick: resetFilters }}
-                description={emptyResultDescription}
-                title="검색 결과가 없어요"
+          ) : requestState === "error" ? (
+            <ErrorState
+              action={{ label: "다시 불러오기", onClick: () => setRetryKey((value) => value + 1) }}
+              description={errorMessage}
+              title="프로젝트 목록을 불러오지 못했습니다"
             />
-            ) : (
+          ) : isProjectsEmpty ? (
+            <EmptyState
+              icon={<span aria-hidden="true" className="project-select__empty-icon" />}
+              action={{ label: "새 프로젝트 만들기", onClick: () => navigate("/projects/new") }}
+              description="새 프로젝트를 만들거나 초대 링크를 통해 팀 프로젝트에 참여할 수 있습니다."
+              title="아직 참여 중인 프로젝트가 없어요"
+            />
+          ) : (
             <>
               <ResponsiveGrid desktopColumns={3} tabletColumns={2}>
-                  {pageProjects.map((project) => (
-                  <ProjectCard key={project.id} {...project} />
-                  ))}
+                {projectList?.content.map((project) => (
+                  <ProjectCard
+                    creditBalance={project.creditBalance}
+                    id={project.projectId}
+                    key={project.projectId}
+                    name={project.name}
+                    plan={project.planName}
+                    repositoryConnected={project.repositoryConnected}
+                    role={project.myPermissionRole}
+                  />
+                ))}
               </ResponsiveGrid>
               {totalPages > 1 ? (
                 <div className="project-select__pagination">
@@ -168,7 +152,7 @@ export function ProjectSelectScreen() {
                 </div>
               ) : null}
             </>
-            )}
+          )}
         </div>
       </PageContainer>
     </main>

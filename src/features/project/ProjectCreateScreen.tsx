@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { getApiErrorMessage } from "../../shared/api/client";
 import { ButtonGroup, PageContainer } from "../../shared/layouts";
 import { Badge, Button, FormField, Input } from "../../shared/ui";
 import { TopBar } from "../workspace/components/TopBar";
@@ -12,18 +13,27 @@ import {
   type ProjectRole,
   type RepositoryOption,
 } from "./projectCreateMock";
+import { createProject, type ProjectLanguage } from "./projectApi";
 import "./ProjectCreateScreen.css";
 
 type WizardStep = 1 | 2 | 3;
 type RepositoryStatus = "idle" | "connected" | "permission-error" | "connection-error";
 
+const projectLanguageMap = {
+  English: "en",
+  한국어: "ko",
+} as const satisfies Record<string, ProjectLanguage>;
+
+type ProjectLanguageLabel = keyof typeof projectLanguageMap;
+
 type BasicInfo = {
   name: string;
+  slug: string;
   summary: string;
   purpose: string;
   features: string;
   roles: ProjectRole[];
-  language: string;
+  language: ProjectLanguageLabel;
 };
 
 type BasicInfoErrors = Partial<Record<keyof BasicInfo, string>>;
@@ -36,6 +46,7 @@ const steps = [
 
 const initialBasicInfo: BasicInfo = {
   name: "",
+  slug: "",
   summary: "",
   purpose: "",
   features: "",
@@ -44,22 +55,22 @@ const initialBasicInfo: BasicInfo = {
 };
 
 export function ProjectCreateScreen() {
+  const navigate = useNavigate();
   const [step, setStep] = useState<WizardStep>(1);
   const [basicInfo, setBasicInfo] = useState<BasicInfo>(initialBasicInfo);
   const [basicInfoErrors, setBasicInfoErrors] = useState<BasicInfoErrors>({});
   const [selectedRepositoryId, setSelectedRepositoryId] = useState("");
   const [repositoryStatus, setRepositoryStatus] = useState<RepositoryStatus>("idle");
   const [feedback, setFeedback] = useState("");
-  const [completed, setCompleted] = useState(false);
-  const previousViewRef = useRef({ completed, step });
+  const [creating, setCreating] = useState(false);
+  const previousStepRef = useRef(step);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
-    const previousView = previousViewRef.current;
-    if (previousView.step === step && previousView.completed === completed) return;
-    previousViewRef.current = { completed, step };
+    if (previousStepRef.current === step) return;
+    previousStepRef.current = step;
     stepHeadingRef.current?.focus();
-  }, [step, completed]);
+  }, [step]);
 
   const moveToStep = (nextStep: WizardStep) => {
     setFeedback("");
@@ -86,6 +97,7 @@ export function ProjectCreateScreen() {
     const errors: BasicInfoErrors = {};
 
     if (!basicInfo.name.trim()) errors.name = "프로젝트 이름을 입력해주세요.";
+    if (!basicInfo.slug.trim()) errors.slug = "프로젝트 식별자를 입력해주세요.";
     if (!basicInfo.summary.trim()) errors.summary = "한 줄 설명을 입력해주세요.";
     if (!basicInfo.purpose.trim()) errors.purpose = "프로젝트 목적을 입력해주세요.";
     if (!basicInfo.features.trim()) errors.features = "주요 기능을 입력해주세요.";
@@ -137,9 +149,28 @@ export function ProjectCreateScreen() {
     moveToStep(3);
   };
 
-  const completeProject = () => {
-    setCompleted(true);
-    setFeedback("프로젝트 생성 정보를 확인했습니다. 실제 프로젝트나 초대는 생성되지 않았습니다.");
+  const completeProject = async () => {
+    if (creating) return;
+    setCreating(true);
+    setFeedback("");
+
+    try {
+      const result = await createProject({
+        defaultLanguage: projectLanguageMap[basicInfo.language],
+        name: basicInfo.name.trim(),
+        purpose: basicInfo.purpose.trim() || undefined,
+        slug: basicInfo.slug.trim(),
+        summary: basicInfo.summary.trim() || undefined,
+      });
+      navigate(`/projects/${result.projectId}/home`, {
+        replace: true,
+        state: { projectName: result.name },
+      });
+    } catch (error) {
+      setFeedback(getApiErrorMessage(error, "프로젝트를 생성하지 못했습니다. 다시 시도해주세요."));
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -154,42 +185,37 @@ export function ProjectCreateScreen() {
             <p aria-live="polite" className="project-create__feedback">{feedback}</p>
           </header>
 
-          {!completed ? (
-            <>
-              <StepIndicator currentStep={step} onMove={moveToStep} />
-              {step === 1 ? (
-                <BasicInfoStep
-                  errors={basicInfoErrors}
-                  headingRef={stepHeadingRef}
-                  onChange={updateBasicInfo}
-                  onSubmit={submitBasicInfo}
-                  onToggleRole={toggleBasicRole}
-                  value={basicInfo}
-                />
-              ) : null}
-              {step === 2 ? (
-                <RepositoryStep
-                  headingRef={stepHeadingRef}
-                  onBack={() => moveToStep(1)}
-                  onCheck={checkRepository}
-                  onSelect={selectRepository}
-                  onSubmit={submitRepository}
-                  selectedRepositoryId={selectedRepositoryId}
-                  status={repositoryStatus}
-                />
-              ) : null}
-              {step === 3 ? (
-                <TeamStep
-                  headingRef={stepHeadingRef}
-                  onBack={() => moveToStep(2)}
-                  onComplete={completeProject}
-                  onCopyLink={() => setFeedback("초대 링크 복사 기능은 아직 연결되지 않았습니다.")}
-                />
-              ) : null}
-            </>
-          ) : (
-            <CompletionState headingRef={stepHeadingRef} />
-          )}
+          <StepIndicator currentStep={step} onMove={moveToStep} />
+          {step === 1 ? (
+            <BasicInfoStep
+              errors={basicInfoErrors}
+              headingRef={stepHeadingRef}
+              onChange={updateBasicInfo}
+              onSubmit={submitBasicInfo}
+              onToggleRole={toggleBasicRole}
+              value={basicInfo}
+            />
+          ) : null}
+          {step === 2 ? (
+            <RepositoryStep
+              headingRef={stepHeadingRef}
+              onBack={() => moveToStep(1)}
+              onCheck={checkRepository}
+              onSelect={selectRepository}
+              onSubmit={submitRepository}
+              selectedRepositoryId={selectedRepositoryId}
+              status={repositoryStatus}
+            />
+          ) : null}
+          {step === 3 ? (
+            <TeamStep
+              creating={creating}
+              headingRef={stepHeadingRef}
+              onBack={() => moveToStep(2)}
+              onComplete={completeProject}
+              onCopyLink={() => setFeedback("초대 링크 복사 기능은 아직 연결되지 않았습니다.")}
+            />
+          ) : null}
         </div>
       </PageContainer>
     </main>
@@ -257,14 +283,27 @@ function BasicInfoStep({
           label="프로젝트 이름 *"
           onChange={(event) => onChange("name", event.target.value)}
           placeholder="예: Contextory Web"
+          maxLength={150}
           required
           value={value.name}
+        />
+        <FormField
+          autoCapitalize="none"
+          autoComplete="off"
+          errorMessage={errors.slug}
+          id="project-create-slug"
+          label="프로젝트 식별자 *"
+          maxLength={150}
+          onChange={(event) => onChange("slug", event.target.value)}
+          placeholder="예: contextory-web"
+          required
+          value={value.slug}
         />
         <FormField
           errorMessage={errors.summary}
           id="project-create-summary"
           label="한 줄 설명 *"
-          maxLength={100}
+          maxLength={500}
           onChange={(event) => onChange("summary", event.target.value)}
           placeholder="프로젝트를 한 문장으로 설명해주세요."
           required
@@ -299,7 +338,7 @@ function BasicInfoStep({
             aria-describedby={errors.language ? "project-create-language-error" : undefined}
             aria-invalid={Boolean(errors.language) || undefined}
             id="project-create-language"
-            onChange={(event) => onChange("language", event.target.value)}
+            onChange={(event) => onChange("language", event.target.value as ProjectLanguageLabel)}
             required
             value={value.language}
           >
@@ -345,6 +384,10 @@ function RepositoryStep({
       <div className="project-create__notice">
         <strong>GitHub 계정 · hong-dev</strong>
         <p>GitHub 로그인 연결은 저장소 접근 권한을 자동으로 부여하지 않습니다. 저장소별 권한을 확인합니다.</p>
+      </div>
+      <div className="project-create__notice">
+        <strong>GitHub 연결 미연동 안내</strong>
+        <p>GitHub 연결은 아직 실제 서버와 연동되지 않았으며 현재 선택 내용은 프로젝트 생성 시 저장되지 않습니다.</p>
       </div>
       <form className="project-create__form" onSubmit={onSubmit}>
         <fieldset className="project-create__repositories">
@@ -417,11 +460,13 @@ function RepositoryStatusMessage({ status }: { status: RepositoryStatus }) {
 }
 
 function TeamStep({
+  creating,
   headingRef,
   onBack,
   onComplete,
   onCopyLink,
 }: {
+  creating: boolean;
   headingRef: React.RefObject<HTMLHeadingElement | null>;
   onBack: () => void;
   onComplete: () => void;
@@ -435,6 +480,10 @@ function TeamStep({
           <h2 id="project-create-team-title" ref={headingRef} tabIndex={-1}>팀 설정</h2>
           <p>초대 링크를 공유하고 참여한 팀원의 역할과 권한을 확인하세요.</p>
         </div>
+      </div>
+      <div className="project-create__notice">
+        <strong>팀 설정 미연동 안내</strong>
+        <p>팀 설정 및 초대 기능은 아직 실제 서버와 연동되지 않았으며 현재 설정은 프로젝트 생성 시 저장되지 않습니다.</p>
       </div>
       <div className="project-create__invite-link">
         <label htmlFor="project-create-invite-link">프로젝트 초대 링크</label>
@@ -464,9 +513,13 @@ function TeamStep({
         </ul>
         <p className="project-create__members-note">초대 링크로 참여한 팀원은 이 목록에서 역할과 권한을 설정할 수 있습니다.</p>
       </section>
+      <div className="project-create__notice">
+        <strong>프로젝트 생성 API 저장 범위</strong>
+        <p>현재 프로젝트 생성 API에는 기본 정보(name, slug, summary, purpose, defaultLanguage)만 저장됩니다. GitHub 저장소 및 팀 설정은 별도 연동 예정입니다.</p>
+      </div>
       <ButtonGroup align="end">
-        <Button onClick={onBack} variant="secondary">이전</Button>
-        <Button onClick={onComplete}>프로젝트 생성 완료</Button>
+        <Button disabled={creating} onClick={onBack} variant="secondary">이전</Button>
+        <Button loading={creating} onClick={onComplete}>프로젝트 생성</Button>
       </ButtonGroup>
     </section>
   );
@@ -508,16 +561,5 @@ function TextAreaField({ error, id, label, onChange, placeholder, value }: { err
       />
       {error ? <p className="project-create__error" id={errorId}>{error}</p> : null}
     </div>
-  );
-}
-
-function CompletionState({ headingRef }: { headingRef: React.RefObject<HTMLHeadingElement | null> }) {
-  return (
-    <section aria-labelledby="project-create-complete-title" className="project-create__complete">
-      <span aria-hidden="true">✓</span>
-      <h2 id="project-create-complete-title" ref={headingRef} tabIndex={-1}>프로젝트 생성 정보를 확인했어요</h2>
-      <p>현재는 mock 완료 상태이며 실제 프로젝트, 저장소 연결, 팀원 초대는 생성되지 않았습니다.</p>
-      <Link className="ui-button ui-button--primary ui-button--md" to="/projects">프로젝트 목록으로 이동</Link>
-    </section>
   );
 }
