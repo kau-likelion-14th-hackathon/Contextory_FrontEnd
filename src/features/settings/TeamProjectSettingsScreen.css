@@ -297,6 +297,123 @@
   padding: 16px;
 }
 
+.settings-repository--empty {
+  align-content: center;
+  min-height: 150px;
+}
+
+.settings-repository__link,
+.settings-repository-option > a {
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 700;
+  width: max-content;
+}
+
+.settings-repository__link:focus-visible,
+.settings-repository-option > a:focus-visible {
+  border-radius: 4px;
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 3px;
+}
+
+.settings-github-warning,
+.settings-github-readonly {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings-github-warning {
+  color: var(--color-danger);
+}
+
+.settings-github-readonly {
+  color: var(--color-text-muted);
+}
+
+.settings-repository-picker {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.settings-repository-list {
+  border: 0;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.settings-repository-list legend {
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.settings-repository-option {
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+  padding: 12px;
+}
+
+.settings-repository-option > label {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.settings-repository-option input {
+  flex: 0 0 auto;
+  height: 18px;
+  width: 18px;
+}
+
+.settings-repository-option label > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settings-repository-option strong,
+.settings-repository-option small {
+  overflow-wrap: anywhere;
+}
+
+.settings-repository-option strong {
+  color: var(--color-text-primary);
+  font-size: 13px;
+}
+
+.settings-repository-option small {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.settings-repository-pagination {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.settings-repository-pagination > span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  min-width: 56px;
+  text-align: center;
+}
+
 .settings-sync-status {
   align-content: start;
   display: grid;
@@ -646,6 +763,15 @@
 
   .settings-member-actions .ui-button {
     min-height: 44px;
+  }
+
+  .settings-repository-pagination .ui-button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .settings-repository-option {
+    align-items: start;
   }
 }
 

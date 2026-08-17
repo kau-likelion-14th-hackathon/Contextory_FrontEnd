@@ -1,19 +1,3 @@
-export type GitHubConnectionViewModel = {
-  account: string;
-  repository: string;
-  visibility: string;
-  defaultBranch: string;
-  permission: string;
-  lastSyncedAt: string;
-  collectionScope: string;
-};
-
-export type SyncStatusViewModel = {
-  status: string;
-  lastSuccess: string;
-  nextCheck: string;
-};
-
 export type TeamMemberViewModel = {
   id: string;
   name: string;
@@ -21,22 +5,6 @@ export type TeamMemberViewModel = {
   role: string;
   permission: string;
   currentUser?: boolean;
-};
-
-export const githubConnectionMock: GitHubConnectionViewModel = {
-  account: "hong-dev",
-  repository: "team/contextory-web",
-  visibility: "Private",
-  defaultBranch: "main",
-  permission: "PR / Commit 읽기 권한",
-  lastSyncedAt: "5분 전",
-  collectionScope: "PR 본문 · Diff · Commit · Issue 링크",
-};
-
-export const syncStatusMock: SyncStatusViewModel = {
-  status: "정상",
-  lastSuccess: "5분 전",
-  nextCheck: "약 10분 후",
 };
 
 export const repositoryScopeMock = [

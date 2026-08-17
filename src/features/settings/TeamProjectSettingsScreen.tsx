@@ -6,6 +6,7 @@ import {
   Badge,
   Button,
   ConfirmDialog,
+  EmptyState,
   ErrorState,
   FormField,
   Input,
@@ -15,13 +16,23 @@ import {
   type TabItem,
 } from "../../shared/ui";
 import {
-  githubConnectionMock,
   repositoryScopeMock,
-  syncStatusMock,
   teamMembersMock,
   teamSeatsMock,
   type TeamMemberViewModel,
 } from "./teamProjectSettingsMock";
+import {
+  connectProjectRepository,
+  disconnectProjectRepository,
+  getGitHubConnectUrl,
+  getGitHubRepositories,
+  getProjectRepository,
+  isProjectRepositoryNotConnectedError,
+  type GitHubRepository,
+  type GitHubRepositoryListResponse,
+  type ProjectRepositoryConnectionResponse,
+  type ProjectRepositoryDetail,
+} from "../github/githubRepositoryApi";
 import {
   deleteProject,
   updateProject,
@@ -379,24 +390,170 @@ function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => voi
 }
 
 function GitHubRepositoryPanel({ onFeedback }: { onFeedback: (message: string) => void }) {
+  const {
+    project,
+    reloadProject,
+    setProjectDetail,
+  } = useOutletContext<ProjectWorkspaceContextValue>();
+  const [repository, setRepository] = useState<
+    ProjectRepositoryDetail | ProjectRepositoryConnectionResponse | null
+  >();
+  const [repositoryLoading, setRepositoryLoading] = useState(true);
+  const [repositoryError, setRepositoryError] = useState("");
+  const [repositoryDialogOpen, setRepositoryDialogOpen] = useState(false);
+  const [repositoryPage, setRepositoryPage] = useState(1);
+  const [repositoryList, setRepositoryList] = useState<GitHubRepositoryListResponse>();
+  const [repositoryListLoading, setRepositoryListLoading] = useState(false);
+  const [repositoryListError, setRepositoryListError] = useState("");
+  const [repositoryListRetryKey, setRepositoryListRetryKey] = useState(0);
+  const [selectedRepository, setSelectedRepository] = useState<GitHubRepository>();
   const [disconnectDialogOpen, setDisconnectDialogOpen] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const closeDisconnectDialog = useCallback(() => setDisconnectDialogOpen(false), []);
-  const confirmDisconnect = useCallback(() => {
-    setDisconnectDialogOpen(false);
-    onFeedback("저장소 연결 해제를 확인했습니다. 실제 연결은 유지됩니다.");
-  }, [onFeedback]);
+  const [connectingGitHub, setConnectingGitHub] = useState(false);
+  const [updatingRepository, setUpdatingRepository] = useState(false);
+  const projectId = project?.projectId;
+  const permissionRole = project?.myPermissionRole?.toUpperCase();
+  const canManageRepository = permissionRole === "OWNER" || permissionRole === "ADMIN";
+
+  const loadProjectRepository = useCallback(async (signal?: AbortSignal) => {
+    if (!projectId) return undefined;
+
+    setRepositoryLoading(true);
+    setRepositoryError("");
+
+    try {
+      const result = await getProjectRepository(projectId, signal);
+      if (signal?.aborted) return undefined;
+      setRepository(result);
+      return result;
+    } catch (error) {
+      if (signal?.aborted) return undefined;
+      if (isProjectRepositoryNotConnectedError(error)) {
+        setRepository(null);
+        return null;
+      }
+      setRepositoryError(getApiErrorMessage(error, "연결된 저장소 정보를 불러오지 못했습니다."));
+      return undefined;
+    } finally {
+      if (!signal?.aborted) setRepositoryLoading(false);
+    }
+  }, [projectId]);
 
   useEffect(() => {
-    if (!syncing) return;
+    const controller = new AbortController();
+    setRepository(undefined);
+    void loadProjectRepository(controller.signal);
+    return () => controller.abort();
+  }, [loadProjectRepository]);
 
-    const timer = window.setTimeout(() => {
-      setSyncing(false);
-      onFeedback("GitHub 저장소 동기화를 완료했습니다.");
-    }, 1600);
+  useEffect(() => {
+    if (!repositoryDialogOpen) return;
 
-    return () => window.clearTimeout(timer);
-  }, [onFeedback, syncing]);
+    const controller = new AbortController();
+    setRepositoryListLoading(true);
+    setRepositoryListError("");
+
+    void getGitHubRepositories({ page: repositoryPage }, controller.signal)
+      .then((result) => {
+        if (!controller.signal.aborted) setRepositoryList(result);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setRepositoryListError(
+          getApiErrorMessage(error, "접근 가능한 GitHub 저장소를 불러오지 못했습니다."),
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setRepositoryListLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [repositoryDialogOpen, repositoryListRetryKey, repositoryPage]);
+
+  const startGitHubConnection = async () => {
+    if (connectingGitHub) return;
+    setConnectingGitHub(true);
+    onFeedback("");
+
+    try {
+      const { installUrl } = await getGitHubConnectUrl();
+      window.location.assign(installUrl);
+    } catch (error) {
+      onFeedback(getApiErrorMessage(error, "GitHub 연결을 시작하지 못했습니다."));
+      setConnectingGitHub(false);
+    }
+  };
+
+  const openRepositoryDialog = () => {
+    if (!canManageRepository) return;
+    setRepositoryPage(1);
+    setRepositoryList(undefined);
+    setRepositoryListError("");
+    setSelectedRepository(undefined);
+    setRepositoryDialogOpen(true);
+  };
+
+  const closeRepositoryDialog = useCallback(() => {
+    if (updatingRepository) return;
+    setRepositoryDialogOpen(false);
+  }, [updatingRepository]);
+
+  const saveRepository = async () => {
+    if (!project || !selectedRepository || updatingRepository || !canManageRepository) return;
+    const replacingRepository = repository !== null && repository !== undefined;
+    setUpdatingRepository(true);
+    onFeedback("");
+
+    try {
+      const updatedRepository = await connectProjectRepository(project.projectId, {
+        githubRepositoryId: selectedRepository.githubRepositoryId,
+        repositoryFullName: selectedRepository.repositoryFullName,
+      });
+      setRepository(updatedRepository);
+      setProjectDetail({
+        ...project,
+        repository: {
+          connected: true,
+          repositoryFullName: updatedRepository.repositoryFullName,
+        },
+      });
+      setRepositoryDialogOpen(false);
+      onFeedback(replacingRepository ? "GitHub 저장소를 교체했습니다." : "GitHub 저장소를 연결했습니다.");
+      await Promise.all([loadProjectRepository(), reloadProject()]);
+    } catch (error) {
+      onFeedback(getApiErrorMessage(error, "GitHub 저장소를 연결하지 못했습니다."));
+    } finally {
+      setUpdatingRepository(false);
+    }
+  };
+
+  const closeDisconnectDialog = useCallback(() => {
+    if (!updatingRepository) setDisconnectDialogOpen(false);
+  }, [updatingRepository]);
+
+  const confirmDisconnect = useCallback(async () => {
+    if (!project || updatingRepository || !canManageRepository) return;
+    setUpdatingRepository(true);
+    onFeedback("");
+
+    try {
+      await disconnectProjectRepository(project.projectId);
+      setRepository(null);
+      setProjectDetail({
+        ...project,
+        repository: { connected: false, repositoryFullName: null },
+      });
+      setDisconnectDialogOpen(false);
+      onFeedback("GitHub 저장소 연결을 해제했습니다.");
+      await reloadProject();
+    } catch (error) {
+      onFeedback(getApiErrorMessage(error, "GitHub 저장소 연결을 해제하지 못했습니다."));
+    } finally {
+      setUpdatingRepository(false);
+    }
+  }, [canManageRepository, onFeedback, project, reloadProject, setProjectDetail, updatingRepository]);
+
+  const repositoryListContent = repositoryList?.content ?? [];
+  const repositoryDetail = repository && "repositoryUrl" in repository ? repository : undefined;
 
   return (
     <section
@@ -413,73 +570,102 @@ function GitHubRepositoryPanel({ onFeedback }: { onFeedback: (message: string) =
         <div className="settings-github-account">
           <span aria-hidden="true" className="settings-github-mark">GH</span>
           <div>
-            <strong>{githubConnectionMock.account} 계정 연결됨</strong>
-            <p>저장소 접근 권한을 가진 GitHub 계정</p>
+            <strong>GitHub App 연결</strong>
+            <p>접근 가능한 저장소를 불러오려면 GitHub App 권한이 필요합니다.</p>
           </div>
-          <Badge variant="success">연결됨</Badge>
+          <Badge variant={repository ? "success" : "neutral"}>
+            {repository ? "저장소 연결됨" : "연결 확인 필요"}
+          </Badge>
         </div>
 
-        <section className="settings-repository" aria-label="연결 저장소">
-          <h3>{githubConnectionMock.repository}</h3>
-          <p>
-            {githubConnectionMock.visibility} · 기본 브랜치 {githubConnectionMock.defaultBranch}
-            {" · "}{githubConnectionMock.permission}
+        {repositoryLoading && repository === undefined ? (
+          <LoadingState
+            description="현재 프로젝트에 연결된 저장소를 확인하고 있습니다."
+            title="저장소 정보를 불러오는 중입니다"
+          />
+        ) : repositoryError && repository === undefined ? (
+          <ErrorState
+            action={{ label: "다시 시도", onClick: () => void loadProjectRepository() }}
+            description={repositoryError}
+            title="저장소 정보를 불러오지 못했습니다"
+          />
+        ) : repository ? (
+          <section className="settings-repository" aria-label="연결 저장소">
+            <h3>{repository.repositoryFullName}</h3>
+            <p>
+              {repositoryDetail
+                ? `${repositoryDetail.private ? "Private" : "Public"} · 기본 브랜치 ${repositoryDetail.defaultBranch || "—"}`
+                : "상세 정보를 다시 확인하고 있습니다."}
+            </p>
+            <dl>
+              <div>
+                <dt>마지막 동기화</dt>
+                <dd>{repositoryDetail?.lastSyncedAt || "—"}</dd>
+              </div>
+              <div>
+                <dt>연결한 사용자 ID</dt>
+                <dd>{repository.connectedBy ?? "—"}</dd>
+              </div>
+            </dl>
+            {repositoryDetail ? (
+              <a
+                className="settings-repository__link"
+                href={repositoryDetail.repositoryUrl}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                GitHub에서 {repository.repositoryFullName} 저장소 보기
+              </a>
+            ) : null}
+          </section>
+        ) : (
+          <div className="settings-repository settings-repository--empty">
+            <h3>연결된 저장소가 없습니다</h3>
+            <p>GitHub App 권한을 연결한 뒤 프로젝트에서 사용할 저장소 하나를 선택할 수 있습니다.</p>
+          </div>
+        )}
+
+        {repositoryError && repository ? (
+          <p className="settings-github-warning" role="alert">{repositoryError}</p>
+        ) : null}
+
+        {canManageRepository ? (
+          <div className="settings-actions">
+            <Button loading={connectingGitHub} onClick={() => void startGitHubConnection()} variant="secondary">
+              GitHub App 연결
+            </Button>
+            <Button disabled={repositoryLoading} onClick={openRepositoryDialog} variant="secondary">
+              {repository ? "저장소 변경" : "저장소 선택"}
+            </Button>
+            {repository ? (
+              <Button onClick={() => setDisconnectDialogOpen(true)} variant="secondary">
+                연결 해제
+              </Button>
+            ) : null}
+          </div>
+        ) : (
+          <p className="settings-github-readonly">
+            현재 권한은 저장소 정보를 조회할 수 있으며 연결, 교체, 해제는 OWNER 또는 ADMIN만 가능합니다.
           </p>
-          <dl>
-            <div>
-              <dt>마지막 성공 동기화</dt>
-              <dd>{githubConnectionMock.lastSyncedAt}</dd>
-            </div>
-            <div>
-              <dt>수집 범위</dt>
-              <dd>{githubConnectionMock.collectionScope}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <div className="settings-actions">
-          <Button
-            onClick={() => onFeedback("저장소 변경 기능은 현재 API와 연결되어 있지 않습니다.")}
-            variant="secondary"
-          >
-            저장소 변경
-          </Button>
-          <Button
-            onClick={() => onFeedback("GitHub 저장소 접근 권한을 확인했습니다.")}
-            variant="secondary"
-          >
-            권한 다시 확인
-          </Button>
-          <Button onClick={() => setDisconnectDialogOpen(true)} variant="secondary">
-            연결 해제
-          </Button>
-        </div>
+        )}
       </section>
 
       <div className="team-project-settings__side-column">
         <section className="settings-card settings-sync-status">
-          <h2>동기화 상태</h2>
-          <Badge variant="success">{syncing ? "동기화 중" : syncStatusMock.status}</Badge>
+          <h2>연결 정보</h2>
+          <Badge variant={repository ? "success" : "neutral"}>
+            {repository ? "연결됨" : "미연결"}
+          </Badge>
           <dl>
             <div>
-              <dt>최근 성공</dt>
-              <dd>{syncStatusMock.lastSuccess}</dd>
+              <dt>저장소 ID</dt>
+              <dd>{repository?.githubRepositoryId ?? "—"}</dd>
             </div>
             <div>
-              <dt>다음 자동 확인</dt>
-              <dd>{syncStatusMock.nextCheck}</dd>
+              <dt>기본 브랜치</dt>
+              <dd>{repositoryDetail?.defaultBranch || "—"}</dd>
             </div>
           </dl>
-          <Button
-            aria-label="GitHub 저장소 지금 동기화"
-            loading={syncing}
-            onClick={() => {
-              setSyncing(true);
-              onFeedback("GitHub 저장소를 동기화하고 있습니다.");
-            }}
-          >
-            {syncing ? "동기화 중" : "지금 동기화"}
-          </Button>
         </section>
 
         <section className="settings-repository-scope">
@@ -490,12 +676,117 @@ function GitHubRepositoryPanel({ onFeedback }: { onFeedback: (message: string) =
         </section>
       </div>
 
+      <Modal
+        closeOnBackdrop={!updatingRepository}
+        closeOnEscape={!updatingRepository}
+        description="GitHub App에서 접근을 허용한 저장소 중 프로젝트에 연결할 저장소 하나를 선택하세요."
+        onClose={closeRepositoryDialog}
+        open={repositoryDialogOpen}
+        title={repository ? "GitHub 저장소 변경" : "GitHub 저장소 연결"}
+      >
+        <div className="settings-repository-picker">
+          {repositoryListLoading && !repositoryList ? (
+            <LoadingState
+              description="GitHub App에서 접근 가능한 저장소를 확인하고 있습니다."
+              title="저장소 목록을 불러오는 중입니다"
+            />
+          ) : repositoryListError ? (
+            <ErrorState
+              action={{
+                label: "다시 시도",
+                onClick: () => {
+                  setRepositoryList(undefined);
+                  setRepositoryListError("");
+                  setRepositoryListRetryKey((key) => key + 1);
+                },
+              }}
+              description={repositoryListError}
+              secondaryAction={{ label: "GitHub App 연결", onClick: () => void startGitHubConnection() }}
+              title="저장소 목록을 불러오지 못했습니다"
+            />
+          ) : repositoryListContent.length === 0 ? (
+            <EmptyState
+              action={{ label: "GitHub App 연결", onClick: () => void startGitHubConnection() }}
+              description="GitHub App에서 저장소 접근 권한을 허용한 뒤 다시 확인해주세요."
+              title="접근 가능한 저장소가 없습니다"
+            />
+          ) : (
+            <fieldset className="settings-repository-list">
+              <legend>연결할 저장소</legend>
+              {repositoryListContent.map((item) => (
+                <div className="settings-repository-option" key={item.githubRepositoryId}>
+                  <label>
+                    <input
+                      checked={selectedRepository?.githubRepositoryId === item.githubRepositoryId}
+                      disabled={updatingRepository}
+                      name="github-repository"
+                      onChange={() => setSelectedRepository(item)}
+                      type="radio"
+                    />
+                    <span>
+                      <strong>{item.repositoryFullName}</strong>
+                      <small>{item.private ? "Private" : "Public"} · 기본 브랜치 {item.defaultBranch || "—"}</small>
+                    </span>
+                  </label>
+                  <a
+                    aria-label={`${item.repositoryFullName} GitHub에서 보기`}
+                    href={item.repositoryUrl}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    보기
+                  </a>
+                </div>
+              ))}
+            </fieldset>
+          )}
+
+          {repositoryList ? (
+            <nav aria-label="GitHub 저장소 목록 페이지" className="settings-repository-pagination">
+              <Button
+                aria-label="이전 저장소 페이지"
+                disabled={repositoryPage <= 1 || repositoryListLoading}
+                onClick={() => setRepositoryPage((page) => Math.max(1, page - 1))}
+                size="sm"
+                variant="secondary"
+              >
+                이전
+              </Button>
+              <span>{repositoryList.page}페이지</span>
+              <Button
+                aria-label="다음 저장소 페이지"
+                disabled={!repositoryList.hasNext || repositoryListLoading}
+                onClick={() => setRepositoryPage((page) => page + 1)}
+                size="sm"
+                variant="secondary"
+              >
+                다음
+              </Button>
+            </nav>
+          ) : null}
+
+          <div className="settings-actions settings-actions--end">
+            <Button disabled={updatingRepository} onClick={closeRepositoryDialog} variant="secondary">
+              취소
+            </Button>
+            <Button
+              disabled={!selectedRepository}
+              loading={updatingRepository}
+              onClick={() => void saveRepository()}
+            >
+              {repository ? "저장소 교체" : "저장소 연결"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       <ConfirmDialog
         cancelText="취소"
         confirmText="연결 해제"
-        description="저장소 연결을 해제해도 승인된 프로젝트 기록은 유지됩니다. 실제 GitHub 연결 정보는 변경되지 않습니다."
+        description="저장소 연결을 해제해도 승인된 프로젝트 기록은 유지됩니다."
+        loading={updatingRepository}
         onCancel={closeDisconnectDialog}
-        onConfirm={confirmDisconnect}
+        onConfirm={() => void confirmDisconnect()}
         open={disconnectDialogOpen}
         title="GitHub 저장소 연결을 해제하시겠어요?"
         variant="danger"
