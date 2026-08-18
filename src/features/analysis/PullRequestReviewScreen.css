@@ -677,6 +677,51 @@
   text-align: left;
 }
 
+.pull-request-review__state-status {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.pull-request-review__draft-empty {
+  color: var(--color-text-muted);
+  display: grid;
+  font-size: 11px;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.pull-request-review__change-list {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pull-request-review__change-list li {
+  display: grid;
+  gap: 4px;
+}
+
+.pull-request-review__change-list code {
+  font-size: 10px;
+}
+
+.pull-request-review__change-list span {
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.pull-request-review__bullet-list {
+  color: var(--color-text-muted);
+  display: grid;
+  font-size: 10px;
+  gap: 6px;
+  list-style: disc;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .pull-request-review__failure-detail {
   background: var(--color-danger-soft);
   border-radius: 10px;
