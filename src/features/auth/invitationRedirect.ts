@@ -26,6 +26,14 @@ export function setKakaoInvitationReturnPath(path: string) {
   }
 }
 
+export function clearKakaoInvitationReturnPath() {
+  try {
+    window.sessionStorage.removeItem(KAKAO_INVITATION_RETURN_KEY);
+  } catch {
+    // storage unavailable이면 무시
+  }
+}
+
 export function consumeKakaoInvitationReturnPath() {
   try {
     const path = window.sessionStorage.getItem(KAKAO_INVITATION_RETURN_KEY);

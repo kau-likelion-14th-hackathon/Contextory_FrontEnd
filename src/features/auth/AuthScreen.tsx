@@ -6,6 +6,7 @@ import { AuthLayout } from "../../shared/layouts";
 import { Button, FormField, Tabs } from "../../shared/ui";
 import { login, signup, toAuthSession } from "./authApi";
 import {
+  clearKakaoInvitationReturnPath,
   getSafeInvitationRedirectPath,
   setKakaoInvitationReturnPath,
 } from "./invitationRedirect";
@@ -105,7 +106,11 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
 
   function handleKakaoLogin() {
     setFeedback("");
-    if (redirectPath) setKakaoInvitationReturnPath(redirectPath);
+    if (redirectPath) {
+      setKakaoInvitationReturnPath(redirectPath);
+    } else {
+      clearKakaoInvitationReturnPath();
+    }
     if (!startKakaoAuthorization(mode === "login" && keepSignedIn)) {
       setFeedback("카카오 로그인을 시작하려면 OAuth 환경설정이 필요합니다.");
     }

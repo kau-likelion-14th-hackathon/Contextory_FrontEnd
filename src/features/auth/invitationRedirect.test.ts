@@ -72,4 +72,16 @@ describe("invitation redirect helpers", () => {
     expect(consumeKakaoInvitationReturnPath()).toBe("/invitations/token");
     expect(consumeKakaoInvitationReturnPath()).toBeUndefined();
   });
+
+  it("clears stale kakao invitation return paths", async () => {
+    const {
+      clearKakaoInvitationReturnPath,
+      consumeKakaoInvitationReturnPath,
+      setKakaoInvitationReturnPath,
+    } = await import("./invitationRedirect");
+
+    setKakaoInvitationReturnPath("/invitations/old-token");
+    clearKakaoInvitationReturnPath();
+    expect(consumeKakaoInvitationReturnPath()).toBeUndefined();
+  });
 });

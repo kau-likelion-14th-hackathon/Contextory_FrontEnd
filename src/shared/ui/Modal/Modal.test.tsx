@@ -84,29 +84,16 @@ describe("Modal focus lifecycle", () => {
     const input = document.getElementById("modal-input") as HTMLInputElement;
     await act(async () => {
       input.focus();
-      input.value = "a";
-      input.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
-    // React 19 controlled input - need to use native input value setter + input event
-    // or click and use userEvent. Use React's change via act:
     await act(async () => {
-      const currentInput = document.getElementById("modal-input") as HTMLInputElement;
-      currentInput.focus();
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
         window.HTMLInputElement.prototype,
         "value",
       )?.set;
-      nativeInputValueSetter?.call(currentInput, "a");
-      currentInput.dispatchEvent(new Event("input", { bubbles: true }));
-      currentInput.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    // Force rerender path through React onChange
-    await act(async () => {
-      root.render(<Harness />);
-      const currentInput = document.getElementById("modal-input") as HTMLInputElement;
-      currentInput.focus();
+      nativeInputValueSetter?.call(input, "a");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
     expect(document.activeElement).toBe(document.getElementById("modal-input"));
