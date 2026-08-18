@@ -1,10 +1,15 @@
 import { useState, type FormEvent } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../shared/api/client";
 import { setSession } from "../../shared/api/session";
 import { AuthLayout } from "../../shared/layouts";
 import { Button, FormField, Tabs } from "../../shared/ui";
 import { login, signup, toAuthSession } from "./authApi";
+import {
+  clearKakaoInvitationReturnPath,
+  getSafeInvitationRedirectPath,
+  setKakaoInvitationReturnPath,
+} from "./invitationRedirect";
 import { startKakaoAuthorization } from "./kakaoAuth";
 import "./Auth.css";
 
@@ -22,6 +27,9 @@ type AuthLocationState = {
 export function AuthScreen({ mode }: { mode: AuthMode }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const redirectPath = getSafeInvitationRedirectPath(searchParams.get("redirect"));
+  const redirectQuery = redirectPath ? `?redirect=${encodeURIComponent(redirectPath)}` : "";
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -37,7 +45,7 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
   });
 
   function handleTabChange(id: string) {
-    navigate(id === "login" ? "/auth/login" : "/auth/signup");
+    navigate(id === "login" ? `/auth/login${redirectQuery}` : `/auth/signup${redirectQuery}`);
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -85,7 +93,7 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
           });
 
       setSession(toAuthSession(response), mode === "login" && keepSignedIn);
-      navigate("/projects", { replace: true });
+      navigate(redirectPath ?? "/projects", { replace: true });
     } catch (error) {
       const fallback = mode === "login"
         ? "이메일 또는 비밀번호를 확인해주세요."
@@ -98,6 +106,11 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
 
   function handleKakaoLogin() {
     setFeedback("");
+    if (redirectPath) {
+      setKakaoInvitationReturnPath(redirectPath);
+    } else {
+      clearKakaoInvitationReturnPath();
+    }
     if (!startKakaoAuthorization(mode === "login" && keepSignedIn)) {
       setFeedback("카카오 로그인을 시작하려면 OAuth 환경설정이 필요합니다.");
     }
@@ -263,11 +276,11 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
         <p className="auth-card__switch">
           {mode === "login" ? (
             <>
-              계정이 없으신가요? <Link to="/auth/signup">회원가입</Link>
+              계정이 없으신가요? <Link to={`/auth/signup${redirectQuery}`}>회원가입</Link>
             </>
           ) : (
             <>
-              이미 계정이 있으신가요? <Link to="/auth/login">로그인</Link>
+              이미 계정이 있으신가요? <Link to={`/auth/login${redirectQuery}`}>로그인</Link>
             </>
           )}
         </p>

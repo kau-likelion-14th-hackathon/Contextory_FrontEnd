@@ -4,6 +4,7 @@ import { apiConfig, getApiErrorMessage } from "../../shared/api/client";
 import { setSession } from "../../shared/api/session";
 import { AuthLayout } from "../../shared/layouts";
 import { kakaoLogin, toAuthSession } from "./authApi";
+import { consumeKakaoInvitationReturnPath } from "./invitationRedirect";
 import { consumeKakaoPersistence } from "./kakaoAuth";
 import "./Auth.css";
 
@@ -32,7 +33,8 @@ export function KakaoCallbackScreen() {
       .then((response) => {
         if (!active) return;
         setSession(toAuthSession(response), consumeKakaoPersistence());
-        navigate("/projects", { replace: true });
+        const returnPath = consumeKakaoInvitationReturnPath();
+        navigate(returnPath ?? "/projects", { replace: true });
       })
       .catch((error: unknown) => {
         if (!active) return;

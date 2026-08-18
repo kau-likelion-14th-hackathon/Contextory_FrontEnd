@@ -535,11 +535,71 @@
   border-bottom: 0;
 }
 
-.settings-members-table thead th:nth-child(1) { width: 21%; }
-.settings-members-table thead th:nth-child(2) { width: 25%; }
-.settings-members-table thead th:nth-child(3) { width: 15%; }
-.settings-members-table thead th:nth-child(4) { width: 26%; }
-.settings-members-table thead th:nth-child(5) { width: 13%; }
+.settings-members-table thead th:nth-child(1) { width: 24%; }
+.settings-members-table thead th:nth-child(2) { width: 22%; }
+.settings-members-table thead th:nth-child(3) { width: 14%; }
+.settings-members-table thead th:nth-child(4) { width: 14%; }
+.settings-members-table thead th:nth-child(5) { width: 24%; }
+
+.settings-member-owner-note {
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.settings-member-edit-dialog,
+.settings-invite-dialog {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-invitations {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-invitations__header h2 {
+  font-size: 14px;
+  margin: 0;
+}
+
+.settings-invitations__header p {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  margin: 4px 0 0;
+}
+
+.settings-invitations__list {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.settings-invitations__item {
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.settings-invitations__item > div {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-invitations__item strong {
+  font-size: 12px;
+}
+
+.settings-invitations__item span {
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
 
 .settings-member-identity {
   align-items: center;

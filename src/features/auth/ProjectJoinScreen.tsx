@@ -1,180 +1,215 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { getApiErrorMessage } from "../../shared/api/client";
+import { getAccessToken } from "../../shared/api/session";
 import { AuthLayout } from "../../shared/layouts";
 import { Button } from "../../shared/ui";
+import {
+  acceptProjectInvitation,
+  getProjectTeamApiErrorCode,
+} from "../team/projectTeamApi";
 import "./Auth.css";
 
-export type ProjectJoinStatus = "invited" | "expired" | "already-joined";
+type JoinErrorView = "invalid" | "already-processed" | "expired" | "email-mismatch" | "already-member" | "generic";
 
-function isProjectJoinStatus(value: string | null): value is ProjectJoinStatus {
-  return value === "invited" || value === "expired" || value === "already-joined";
+function getJoinErrorView(code: string | undefined): JoinErrorView {
+  if (code === "PROJECT_INVITATION_4041") return "invalid";
+  if (code === "PROJECT_INVITATION_4001") return "already-processed";
+  if (code === "PROJECT_INVITATION_4002") return "expired";
+  if (code === "PROJECT_INVITATION_4031") return "email-mismatch";
+  if (code === "PROJECT_MEMBER_4091") return "already-member";
+  return "generic";
 }
 
-// TODO: 초대 상세 조회 API 연결되면 token으로 실제 데이터 조회
-const invitationMock = {
-  projectId: "contextory-web",
-  projectName: "Contextory Web",
-  inviter: "홍길동 · 프로젝트 관리자",
-  role: "프론트엔드",
-  repository: "team/contextory-web",
-};
+function getJoinErrorMessage(code: string | undefined, fallback: string) {
+  if (code === "PROJECT_INVITATION_4041") return "유효하지 않은 초대 링크입니다.";
+  if (code === "PROJECT_INVITATION_4001") return "이미 처리되었거나 취소된 초대입니다.";
+  if (code === "PROJECT_INVITATION_4002") return "초대 링크가 만료되었습니다.";
+  if (code === "PROJECT_INVITATION_4031") return "현재 로그인한 계정의 이메일로는 이 초대를 수락할 수 없습니다.";
+  if (code === "PROJECT_MEMBER_4091") return "이미 이 프로젝트에 참여 중입니다.";
+  return fallback;
+}
 
 export function ProjectJoinScreen() {
   const { token } = useParams();
-  void token; // TODO:초대 상세 조회 API 붙일 때 사용 예정
-
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const statusParam = searchParams.get("status");
-  const status: ProjectJoinStatus = isProjectJoinStatus(statusParam) ? statusParam : "invited";
-  const [feedback, setFeedback] = useState({ message: "", revision: 0 });
+  const isLoggedIn = Boolean(getAccessToken());
+  const [accepting, setAccepting] = useState(false);
+  const [errorView, setErrorView] = useState<JoinErrorView | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  function handleAccept() {
-    setFeedback((current) => ({
-      message: "프로젝트 참여를 mock으로 확인했습니다. 실제 참여 정보는 변경되지 않았습니다.",
-      revision: current.revision + 1,
-    }));
+  const invitationPath = token ? `/invitations/${token}` : undefined;
+  const authRedirect = invitationPath
+    ? `?redirect=${encodeURIComponent(invitationPath)}`
+    : "";
+
+  async function handleAccept() {
+    if (!token || accepting) return;
+
+    setAccepting(true);
+    setErrorView(null);
+    setErrorMessage("");
+
+    try {
+      const response = await acceptProjectInvitation(token);
+      navigate(`/projects/${response.projectId}/home`, { replace: true });
+    } catch (error: unknown) {
+      const code = getProjectTeamApiErrorCode(error);
+      setErrorView(getJoinErrorView(code));
+      setErrorMessage(getJoinErrorMessage(code, getApiErrorMessage(error, "프로젝트 참여에 실패했습니다.")));
+    } finally {
+      setAccepting(false);
+    }
+  }
+
+  if (!token) {
+    return (
+      <AuthLayout
+        description="초대 링크를 확인한 뒤 프로젝트에 참여할 수 있습니다."
+        title="프로젝트 초대"
+      >
+        <div className="auth-card auth-card--centered">
+          <div className="auth-card__header">
+            <h1>유효하지 않은 초대 링크입니다</h1>
+            <p>초대 링크가 올바르지 않습니다. 프로젝트 관리자에게 새 링크를 요청해주세요.</p>
+          </div>
+          <Button fullWidth onClick={() => navigate("/projects")} variant="primary">
+            프로젝트 목록으로
+          </Button>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  if (errorView === "invalid") {
+    return (
+      <AuthLayout description="초대 링크를 확인한 뒤 프로젝트에 참여할 수 있습니다." title="프로젝트 초대">
+        <JoinErrorCard
+          description={errorMessage}
+          onProjects={() => navigate("/projects")}
+          title="유효하지 않은 초대 링크입니다"
+        />
+      </AuthLayout>
+    );
+  }
+
+  if (errorView === "already-processed") {
+    return (
+      <AuthLayout description="초대 링크를 확인한 뒤 프로젝트에 참여할 수 있습니다." title="프로젝트 초대">
+        <JoinErrorCard
+          description={errorMessage}
+          onProjects={() => navigate("/projects")}
+          title="이미 처리된 초대입니다"
+        />
+      </AuthLayout>
+    );
+  }
+
+  if (errorView === "expired") {
+    return (
+      <AuthLayout description="초대 링크를 확인한 뒤 프로젝트에 참여할 수 있습니다." title="프로젝트 초대">
+        <JoinErrorCard
+          description={errorMessage}
+          onProjects={() => navigate("/projects")}
+          title="초대 링크가 만료되었습니다"
+        />
+      </AuthLayout>
+    );
+  }
+
+  if (errorView === "email-mismatch") {
+    return (
+      <AuthLayout description="초대 링크를 확인한 뒤 프로젝트에 참여할 수 있습니다." title="프로젝트 초대">
+        <JoinErrorCard
+          description={errorMessage}
+          onProjects={() => navigate("/projects")}
+          secondaryAction={{ label: "로그인 화면으로", to: `/auth/login${authRedirect}` }}
+          title="현재 계정으로 수락할 수 없습니다"
+        />
+      </AuthLayout>
+    );
+  }
+
+  if (errorView === "already-member") {
+    return (
+      <AuthLayout description="초대 링크를 확인한 뒤 프로젝트에 참여할 수 있습니다." title="프로젝트 초대">
+        <JoinErrorCard
+          description={errorMessage}
+          onProjects={() => navigate("/projects")}
+          title="이미 프로젝트에 참여 중입니다"
+        />
+      </AuthLayout>
+    );
   }
 
   return (
     <AuthLayout
-      title={
-        <span className="auth-layout-shell__brand-title">
-          <span>프로젝트의 맥락을 이해하고,</span>
-          <span className="auth-layout-shell__brand-title--accent">
-            더 나은 협업을 만들어가세요
-          </span>
-        </span>
-      }
-      description={
-        <>
-          GitHub 변경을 수집하고 AI가 분석한 맥락을
-          <br />
-          검토·승인하여 팀의 프로젝트 메모리로 남깁니다.
-        </>
-      }
+      description="초대 링크를 확인한 뒤 프로젝트에 참여할 수 있습니다."
+      title="프로젝트 초대"
     >
       <div className="auth-card auth-card--centered">
-        <p aria-atomic="true" aria-live="polite" className="auth-card__feedback">
-          {feedback.message ? <span key={feedback.revision}>{feedback.message}</span> : null}
-        </p>
-        {status === "invited" ? (
-          <>
-            <span aria-hidden="true" className="auth-card__project-badge">
-              {invitationMock.projectName.charAt(0)}
-            </span>
-            <div className="auth-card__header auth-card__header--left">
-              <h1>{invitationMock.projectName}에 초대받았어요</h1>
-              <p>프로젝트 정보를 확인하고 참여하세요.</p>
-            </div>
+        <div className="auth-card__header auth-card__header--left">
+          <h1>프로젝트 초대를 받았습니다</h1>
+          <p>
+            {isLoggedIn
+              ? "로그인한 계정으로 초대를 수락하면 프로젝트에 참여합니다."
+              : "로그인 또는 회원가입 후 이 화면으로 돌아와 초대를 수락할 수 있습니다."}
+          </p>
+        </div>
 
-            <dl className="auth-card__info-list">
-              <div>
-                <dt>프로젝트</dt>
-                <dd>{invitationMock.projectName}</dd>
-              </div>
-              <div>
-                <dt>초대한 사람</dt>
-                <dd>{invitationMock.inviter}</dd>
-              </div>
-              <div>
-                <dt>내 역할</dt>
-                <dd>{invitationMock.role}</dd>
-              </div>
-              <div>
-                <dt>GitHub 저장소</dt>
-                <dd>{invitationMock.repository}</dd>
-              </div>
-            </dl>
-
-            <Button fullWidth onClick={handleAccept} variant="primary">
-              프로젝트 참여하기
-            </Button>
-
-            <div className="auth-card__notice">
-              <strong>로그인하지 않은 경우에도 초대 정보는 유지됩니다.</strong>
-              <p>로그인 또는 회원가입 완료 후 이 프로젝트 참여 화면으로<br/>다시 돌아옵니다.</p>
-            </div>
-          </>
+        {errorView === "generic" && errorMessage ? (
+          <p aria-live="polite" className="auth-card__feedback" role="alert">{errorMessage}</p>
         ) : null}
 
-        {status === "expired" ? (
+        {isLoggedIn ? (
+          <Button fullWidth loading={accepting} onClick={() => void handleAccept()} variant="primary">
+            프로젝트 참여하기
+          </Button>
+        ) : (
           <>
-          <span aria-hidden="true" className="auth-card__icon auth-card__icon--warning">
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="8" x2="12" y2="13" />
-              <line x1="12" y1="16.5" x2="12" y2="16.51" />
-            </svg>
-          </span>
-            <div className="auth-card__header">
-              <h1>초대 링크가 만료되었습니다</h1>
-              <p>
-                이 초대 링크는 더 이상 사용할 수 없습니다.
-                <br />
-                프로젝트 관리자에게 새 초대 링크를 요청해주세요.
-              </p>
-            </div>
-
-            <dl className="auth-card__info-list">
-              <div>
-                <dt>프로젝트</dt>
-                <dd>{invitationMock.projectName}</dd>
-              </div>
-              <div>
-                <dt>초대 상태</dt>
-                <dd>만료됨</dd>
-              </div>
-            </dl>
-
-            <Button fullWidth onClick={() => navigate("/projects")} variant="primary">
-              프로젝트 목록으로
-            </Button>
-
-            <p className="auth-card__switch">새 링크를 받았다면 다시 열어주세요</p>
-          </>
-        ) : null}
-
-        {status === "already-joined" ? (
-          <>
-            <span aria-hidden="true" className="auth-card__icon auth-card__icon--success">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-            </span>
-            <div className="auth-card__header">
-              <h1>이미 참여 중인 프로젝트예요</h1>
-              <p>
-                {invitationMock.projectName} 프로젝트의 팀원으로 이미 등록되어 있습니다.
-                <br />
-                바로 프로젝트 홈으로 이동할 수 있어요.
-              </p>
-            </div>
-
-            <dl className="auth-card__info-list">
-              <div>
-                <dt>프로젝트</dt>
-                <dd>{invitationMock.projectName}</dd>
-              </div>
-              <div>
-                <dt>내 역할</dt>
-                <dd>{invitationMock.role}</dd>
-              </div>
-            </dl>
-
-            <Button
-              fullWidth
-              onClick={() => navigate(`/projects/${invitationMock.projectId}/home`)}
-              variant="primary"
-            >
-              프로젝트로 이동
-            </Button>
-
+            <Link className="ui-button ui-button--primary ui-button--md ui-button--full" to={`/auth/login${authRedirect}`}>
+              로그인 후 참여하기
+            </Link>
             <p className="auth-card__switch">
-              <Link to="/projects">프로젝트 목록 보기</Link>
+              계정이 없으신가요? <Link to={`/auth/signup${authRedirect}`}>회원가입</Link>
             </p>
           </>
-        ) : null}
+        )}
+
+        <div className="auth-card__notice">
+          <strong>초대 정보는 수락 후에 확인할 수 있습니다.</strong>
+          <p>프로젝트 이름과 역할은 참여 완료 후 프로젝트 홈에서 확인할 수 있습니다.</p>
+        </div>
       </div>
     </AuthLayout>
+  );
+}
+
+function JoinErrorCard({
+  title,
+  description,
+  onProjects,
+  secondaryAction,
+}: {
+  title: string;
+  description: string;
+  onProjects: () => void;
+  secondaryAction?: { label: string; to: string };
+}) {
+  return (
+    <div className="auth-card auth-card--centered">
+      <div className="auth-card__header">
+        <h1>{title}</h1>
+        <p role="alert">{description}</p>
+      </div>
+      <Button fullWidth onClick={onProjects} variant="primary">
+        프로젝트 목록으로
+      </Button>
+      {secondaryAction ? (
+        <p className="auth-card__switch">
+          <Link to={secondaryAction.to}>{secondaryAction.label}</Link>
+        </p>
+      ) : null}
+    </div>
   );
 }

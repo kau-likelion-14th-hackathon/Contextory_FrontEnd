@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../shared/api/client";
+import { getCurrentUser } from "../../shared/api/session";
 import { PageContainer } from "../../shared/layouts";
 import {
   Badge,
@@ -17,9 +18,6 @@ import {
 } from "../../shared/ui";
 import {
   repositoryScopeMock,
-  teamMembersMock,
-  teamSeatsMock,
-  type TeamMemberViewModel,
 } from "./teamProjectSettingsMock";
 import {
   connectProjectRepository,
@@ -41,6 +39,18 @@ import {
   type UpdateProjectRequest,
 } from "../project/projectApi";
 import type { ProjectWorkspaceContextValue } from "../workspace/WorkspaceShell";
+import {
+  cancelProjectInvitation,
+  createProjectInvitation,
+  getProjectInvitations,
+  getProjectMembers,
+  getProjectTeamApiErrorCode,
+  removeProjectMember,
+  updateProjectMember,
+  type EditableProjectPermissionRole,
+  type ProjectInvitation,
+  type ProjectMember,
+} from "../team/projectTeamApi";
 import { BillingSettingsPanel, stateDescriptions } from "./BillingSettingsPanel";
 import { isBillingViewState } from "./billingSettingsMock";
 import "./TeamProjectSettingsScreen.css";
@@ -61,6 +71,47 @@ function toProjectSettingsForm(project: ProjectDetailResponse): ProjectSettingsF
     purpose: project.purpose ?? "",
     summary: project.summary ?? "",
   };
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EDITABLE_PERMISSION_ROLES: EditableProjectPermissionRole[] = ["ADMIN", "MEMBER", "VIEWER"];
+const INVITE_PERMISSION_ROLES: Array<"MEMBER" | "VIEWER"> = ["MEMBER", "VIEWER"];
+
+const PERMISSION_ROLE_LABELS: Record<string, string> = {
+  OWNER: "소유자",
+  ADMIN: "관리자",
+  MEMBER: "멤버",
+  VIEWER: "뷰어",
+};
+
+function formatPermissionRole(role: string) {
+  return PERMISSION_ROLE_LABELS[role.toUpperCase()] ?? role;
+}
+
+function canManageProjectMembers(role?: string) {
+  const normalized = role?.toUpperCase();
+  return normalized === "OWNER" || normalized === "ADMIN";
+}
+
+function isOwnerMember(member: ProjectMember) {
+  return member.permissionRole.toUpperCase() === "OWNER";
+}
+
+function formatExpiresAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function getInvitationFeedbackMessage(error: unknown, fallback: string) {
+  const code = getProjectTeamApiErrorCode(error);
+  if (code === "PROJECT_INVITATION_4091") return "같은 이메일로 대기 중인 초대가 이미 있습니다.";
+  if (code === "PROJECT_INVITATION_5031") return "초대 이메일을 발송하지 못했습니다. 잠시 후 다시 시도해주세요.";
+  if (code === "PROJECT_4032") return "OWNER 또는 ADMIN 권한이 필요합니다.";
+  return getApiErrorMessage(error, fallback);
 }
 
 const settingsTabs: TabItem[] = [
@@ -796,6 +847,131 @@ function GitHubRepositoryPanel({ onFeedback }: { onFeedback: (message: string) =
 }
 
 function MembersPanel({ onFeedback }: { onFeedback: (message: string) => void }) {
+  const navigate = useNavigate();
+  const { project, reloadProject } = useOutletContext<ProjectWorkspaceContextValue>();
+  const currentUser = getCurrentUser();
+  const projectId = project?.projectId;
+  const canManageMembers = canManageProjectMembers(project?.myPermissionRole);
+  const [members, setMembers] = useState<ProjectMember[]>();
+  const [membersState, setMembersState] = useState<"loading" | "error" | "empty" | "success">("loading");
+  const [membersError, setMembersError] = useState("");
+  const [membersRetryKey, setMembersRetryKey] = useState(0);
+  const [invitations, setInvitations] = useState<ProjectInvitation[]>();
+  const [invitationsState, setInvitationsState] = useState<"loading" | "error" | "empty" | "success" | "idle">("idle");
+  const [invitationsError, setInvitationsError] = useState("");
+  const [invitationsRetryKey, setInvitationsRetryKey] = useState(0);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<ProjectMember | null>(null);
+  const [removingMember, setRemovingMember] = useState<ProjectMember | null>(null);
+  const [cancelingInvitation, setCancelingInvitation] = useState<ProjectInvitation | null>(null);
+  const [memberActionPending, setMemberActionPending] = useState(false);
+
+  const reloadMembers = useCallback(() => {
+    setMembersRetryKey((key) => key + 1);
+  }, []);
+
+  const reloadInvitations = useCallback(() => {
+    setInvitationsRetryKey((key) => key + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    const controller = new AbortController();
+    setMembersState("loading");
+    setMembersError("");
+
+    void getProjectMembers(projectId, controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        setMembers(result);
+        setMembersState(result.length === 0 ? "empty" : "success");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setMembers(undefined);
+        setMembersState("error");
+        setMembersError(getApiErrorMessage(error, "팀원 목록을 불러오지 못했습니다."));
+      });
+
+    return () => controller.abort();
+  }, [membersRetryKey, projectId]);
+
+  useEffect(() => {
+    if (!projectId || !canManageMembers) {
+      setInvitations(undefined);
+      setInvitationsState("idle");
+      setInvitationsError("");
+      return;
+    }
+
+    const controller = new AbortController();
+    setInvitationsState("loading");
+    setInvitationsError("");
+
+    void getProjectInvitations(projectId, "PENDING", controller.signal)
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        setInvitations(result);
+        setInvitationsState(result.length === 0 ? "empty" : "success");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setInvitations(undefined);
+        setInvitationsState("error");
+        setInvitationsError(getApiErrorMessage(error, "대기 중인 초대를 불러오지 못했습니다."));
+      });
+
+    return () => controller.abort();
+  }, [canManageMembers, invitationsRetryKey, projectId]);
+
+  const confirmRemoveMember = async () => {
+    if (!projectId || !removingMember || memberActionPending) return;
+
+    const removedMember = removingMember;
+    const isSelfRemoval = currentUser?.id !== undefined && removedMember.userId === currentUser.id;
+
+    setMemberActionPending(true);
+    onFeedback("");
+
+    try {
+      await removeProjectMember(projectId, removedMember.projectMemberId);
+      setRemovingMember(null);
+
+      if (isSelfRemoval) {
+        navigate("/projects", { replace: true });
+        return;
+      }
+
+      onFeedback(`${removedMember.username} 멤버를 제거했습니다.`);
+      reloadMembers();
+    } catch (error: unknown) {
+      onFeedback(getApiErrorMessage(error, "멤버를 제거하지 못했습니다."));
+    } finally {
+      setMemberActionPending(false);
+    }
+  };
+
+  const confirmCancelInvitation = async () => {
+    if (!projectId || !cancelingInvitation || memberActionPending) return;
+
+    setMemberActionPending(true);
+    onFeedback("");
+
+    try {
+      await cancelProjectInvitation(projectId, cancelingInvitation.invitationId);
+      setCancelingInvitation(null);
+      onFeedback("초대를 취소했습니다.");
+      reloadInvitations();
+    } catch (error: unknown) {
+      onFeedback(getApiErrorMessage(error, "초대를 취소하지 못했습니다."));
+    } finally {
+      setMemberActionPending(false);
+    }
+  };
+
+  const memberCount = members?.length ?? 0;
+
   return (
     <section
       aria-label="팀원 및 역할 설정"
@@ -805,80 +981,498 @@ function MembersPanel({ onFeedback }: { onFeedback: (message: string) => void })
       <div className="settings-members-banner">
         <span aria-hidden="true" className="settings-members-banner__icon">ⓘ</span>
         <p>역할은 AI 영향도 분석 결과의 우선순위와 프로젝트 권한 범위에 영향을 줄 수 있습니다.</p>
-        <strong>{teamSeatsMock.used} / {teamSeatsMock.total} seats used</strong>
-        <Button
-          onClick={() => onFeedback("팀원 초대 기능은 현재 API와 연결되어 있지 않습니다.")}
-          size="sm"
-        >
-          팀원 초대
-        </Button>
+        <strong>현재 멤버 {membersState === "success" || membersState === "empty" ? memberCount : "—"}명</strong>
+        {canManageMembers ? (
+          <Button onClick={() => setInviteModalOpen(true)} size="sm">
+            팀원 초대
+          </Button>
+        ) : null}
       </div>
 
-      <div className="settings-members-table-wrap">
-        <table className="settings-members-table">
-          <thead>
-            <tr>
-              <th scope="col">이름</th>
-              <th scope="col">이메일</th>
-              <th scope="col">역할</th>
-              <th scope="col">권한 수준</th>
-              <th scope="col">작업</th>
-            </tr>
-          </thead>
-          <tbody>
-            {teamMembersMock.map((member) => (
-              <MemberTableRow key={member.id} member={member} onFeedback={onFeedback} />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {membersState === "loading" ? (
+        <LoadingState
+          description="프로젝트에 참여 중인 팀원을 확인하고 있습니다."
+          title="팀원 목록을 불러오는 중입니다"
+        />
+      ) : membersState === "error" ? (
+        <ErrorState
+          action={{ label: "다시 시도", onClick: reloadMembers }}
+          description={membersError}
+          title="팀원 목록을 불러오지 못했습니다"
+        />
+      ) : membersState === "empty" ? (
+        <EmptyState
+          description="아직 프로젝트에 참여한 팀원이 없습니다."
+          title="팀원이 없습니다"
+        />
+      ) : (
+        <div className="settings-members-table-wrap">
+          <table className="settings-members-table">
+            <thead>
+              <tr>
+                <th scope="col">이름</th>
+                <th scope="col">프로젝트 역할</th>
+                <th scope="col">권한</th>
+                <th scope="col">상태</th>
+                {canManageMembers ? <th scope="col">작업</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {members?.map((member) => (
+                <MemberTableRow
+                  canManage={canManageMembers}
+                  currentUserId={currentUser?.id}
+                  key={member.projectMemberId}
+                  member={member}
+                  onEdit={() => setEditingMember(member)}
+                  onRemove={() => setRemovingMember(member)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {canManageMembers ? (
+        <PendingInvitationsSection
+          errorMessage={invitationsError}
+          invitations={invitations}
+          onCancel={(invitation) => setCancelingInvitation(invitation)}
+          onRetry={reloadInvitations}
+          state={invitationsState}
+        />
+      ) : null}
+
+      <InviteMemberModal
+        onClose={() => setInviteModalOpen(false)}
+        onFeedback={onFeedback}
+        onSuccess={() => {
+          setInviteModalOpen(false);
+          onFeedback("초대 이메일을 발송했습니다.");
+          reloadInvitations();
+        }}
+        open={inviteModalOpen}
+        projectId={projectId}
+      />
+
+      <MemberEditModal
+        member={editingMember}
+        onClose={() => setEditingMember(null)}
+        onSaved={(updatedMember) => {
+          const previousMember = editingMember;
+          setMembers((current) => current?.map((item) => (
+            item.projectMemberId === updatedMember.projectMemberId
+              ? {
+                  ...item,
+                  permissionRole: updatedMember.permissionRole,
+                  projectRole: updatedMember.projectRole,
+                }
+              : item
+          )));
+          setEditingMember(null);
+          onFeedback("멤버 정보를 저장했습니다.");
+
+          const isSelfPermissionChange = currentUser?.id !== undefined
+            && previousMember?.userId === currentUser.id
+            && updatedMember.permissionRole.toUpperCase() !== previousMember.permissionRole.toUpperCase();
+
+          if (isSelfPermissionChange) {
+            void reloadProject();
+          }
+        }}
+        open={editingMember !== null}
+        projectId={projectId}
+      />
+
+      <ConfirmDialog
+        cancelText="취소"
+        confirmText="멤버 제거"
+        description={`${removingMember?.username ?? "이 멤버"}를 프로젝트에서 제거합니다. 이 작업은 되돌릴 수 없습니다.`}
+        loading={memberActionPending}
+        onCancel={() => {
+          if (!memberActionPending) setRemovingMember(null);
+        }}
+        onConfirm={() => void confirmRemoveMember()}
+        open={removingMember !== null}
+        title="멤버를 제거하시겠어요?"
+        variant="danger"
+      />
+
+      <ConfirmDialog
+        cancelText="닫기"
+        confirmText="초대 취소"
+        description={`${cancelingInvitation?.inviteEmail ?? "이 초대"}에 대한 초대를 취소합니다.`}
+        loading={memberActionPending}
+        onCancel={() => {
+          if (!memberActionPending) setCancelingInvitation(null);
+        }}
+        onConfirm={() => void confirmCancelInvitation()}
+        open={cancelingInvitation !== null}
+        title="초대를 취소하시겠어요?"
+        variant="danger"
+      />
     </section>
   );
 }
 
 function MemberTableRow({
+  canManage,
+  currentUserId,
   member,
-  onFeedback,
+  onEdit,
+  onRemove,
 }: {
-  member: TeamMemberViewModel;
-  onFeedback: (message: string) => void;
+  canManage: boolean;
+  currentUserId?: number;
+  member: ProjectMember;
+  onEdit: () => void;
+  onRemove: () => void;
 }) {
-  const displayName = member.currentUser ? `${member.name} (나)` : member.name;
+  const isCurrentUser = currentUserId !== undefined && member.userId === currentUserId;
+  const displayName = isCurrentUser ? `${member.username} (나)` : member.username;
+  const ownerMember = isOwnerMember(member);
+  const projectRoleLabel = member.projectRole?.trim() || "역할 미지정";
 
   return (
     <tr>
       <th data-label="이름" scope="row">
         <span className="settings-member-identity">
           <span aria-hidden="true" className="settings-member-avatar">
-            {member.name.slice(0, 1)}
+            {member.username.slice(0, 1)}
           </span>
           <span className="settings-member-name">{displayName}</span>
         </span>
       </th>
-      <td data-label="이메일">{member.email}</td>
-      <td data-label="역할"><Badge variant="success">{member.role}</Badge></td>
-      <td data-label="권한 수준">{member.permission}</td>
-      <td data-label="작업">
-        <div className="settings-member-actions">
-          <Button
-            aria-label={`${displayName} 역할 편집`}
-            onClick={() => onFeedback(`${displayName} 역할 편집은 현재 API와 연결되어 있지 않습니다.`)}
-            size="sm"
-            variant="secondary"
-          >
-            편집
-          </Button>
-          <Button
-            aria-label={`${displayName} 기타 작업`}
-            onClick={() => onFeedback(`${displayName}의 추가 작업은 현재 준비 중입니다.`)}
-            size="sm"
-            variant="secondary"
-          >
-            ⋯
-          </Button>
-        </div>
-      </td>
+      <td data-label="프로젝트 역할">{projectRoleLabel}</td>
+      <td data-label="권한">{formatPermissionRole(member.permissionRole)}</td>
+      <td data-label="상태">{member.status}</td>
+      {canManage ? (
+        <td data-label="작업">
+          {ownerMember ? (
+            <span className="settings-member-owner-note">소유자는 수정할 수 없습니다</span>
+          ) : (
+            <div className="settings-member-actions">
+              <Button
+                aria-label={`${displayName} 정보 편집`}
+                onClick={onEdit}
+                size="sm"
+                variant="secondary"
+              >
+                편집
+              </Button>
+              <Button
+                aria-label={`${displayName} 멤버 제거`}
+                onClick={onRemove}
+                size="sm"
+                variant="secondary"
+              >
+                제거
+              </Button>
+            </div>
+          )}
+        </td>
+      ) : null}
     </tr>
+  );
+}
+
+function PendingInvitationsSection({
+  invitations,
+  errorMessage,
+  onCancel,
+  onRetry,
+  state,
+}: {
+  invitations?: ProjectInvitation[];
+  errorMessage: string;
+  onCancel: (invitation: ProjectInvitation) => void;
+  onRetry: () => void;
+  state: "loading" | "error" | "empty" | "success" | "idle";
+}) {
+  if (state === "idle") return null;
+
+  return (
+    <section aria-labelledby="pending-invitations-title" className="settings-invitations">
+      <header className="settings-invitations__header">
+        <h2 id="pending-invitations-title">대기 중인 초대</h2>
+        <p>이메일로 발송된 초대 중 아직 수락되지 않은 항목입니다.</p>
+      </header>
+
+      {state === "loading" ? (
+        <LoadingState
+          description="대기 중인 초대를 확인하고 있습니다."
+          title="초대 목록을 불러오는 중입니다"
+        />
+      ) : state === "error" ? (
+        <ErrorState
+          action={{ label: "다시 시도", onClick: onRetry }}
+          description={errorMessage}
+          title="초대 목록을 불러오지 못했습니다"
+        />
+      ) : state === "empty" ? (
+        <EmptyState
+          description="현재 대기 중인 초대가 없습니다."
+          title="대기 중인 초대가 없습니다"
+        />
+      ) : (
+        <ul className="settings-invitations__list">
+          {invitations?.map((invitation) => (
+            <li className="settings-invitations__item" key={invitation.invitationId}>
+              <div>
+                <strong>{invitation.inviteEmail}</strong>
+                <span>{invitation.status}</span>
+                <span>만료 · {formatExpiresAt(invitation.expiresAt)}</span>
+              </div>
+              <Button onClick={() => onCancel(invitation)} size="sm" variant="secondary">
+                초대 취소
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function MemberEditModal({
+  member,
+  onClose,
+  onSaved,
+  open,
+  projectId,
+}: {
+  member: ProjectMember | null;
+  onClose: () => void;
+  onSaved: (member: ProjectMember) => void;
+  open: boolean;
+  projectId?: number;
+}) {
+  const [permissionRole, setPermissionRole] = useState<EditableProjectPermissionRole>("MEMBER");
+  const [projectRole, setProjectRole] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!member) return;
+    const normalizedRole = member.permissionRole.toUpperCase();
+    setPermissionRole(
+      EDITABLE_PERMISSION_ROLES.includes(normalizedRole as EditableProjectPermissionRole)
+        ? normalizedRole as EditableProjectPermissionRole
+        : "MEMBER",
+    );
+    setProjectRole(member.projectRole ?? "");
+    setErrorMessage("");
+  }, [member]);
+
+  const handleClose = () => {
+    if (!saving) onClose();
+  };
+
+  const handleSave = async () => {
+    if (!member || !projectId || saving) return;
+
+    const body: {
+      permissionRole?: EditableProjectPermissionRole;
+      projectRole?: string;
+    } = {};
+    const trimmedRole = projectRole.trim();
+    const currentRole = member.permissionRole.toUpperCase();
+
+    if (permissionRole !== currentRole) body.permissionRole = permissionRole;
+    if (trimmedRole && trimmedRole !== (member.projectRole ?? "")) body.projectRole = trimmedRole;
+
+    if (Object.keys(body).length === 0) {
+      onClose();
+      return;
+    }
+
+    setSaving(true);
+    setErrorMessage("");
+
+    try {
+      const response = await updateProjectMember(projectId, member.projectMemberId, body);
+      onSaved({
+        ...member,
+        permissionRole: response.permissionRole,
+        projectRole: response.projectRole,
+      });
+    } catch (error: unknown) {
+      setErrorMessage(getApiErrorMessage(error, "멤버 정보를 저장하지 못했습니다."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      closeOnBackdrop={!saving}
+      closeOnEscape={!saving}
+      description="권한과 프로젝트 역할을 변경합니다. 소유자 권한은 이 화면에서 변경할 수 없습니다."
+      onClose={handleClose}
+      open={open}
+      title={`${member?.username ?? "멤버"} 정보 편집`}
+    >
+      <div className="settings-member-edit-dialog">
+        <div className="form-field">
+          <label className="form-field__label" htmlFor="member-permission-role">권한</label>
+          <select
+            className="ui-input"
+            disabled={saving}
+            id="member-permission-role"
+            onChange={(event) => setPermissionRole(event.target.value as EditableProjectPermissionRole)}
+            value={permissionRole}
+          >
+            {EDITABLE_PERMISSION_ROLES.map((role) => (
+              <option key={role} value={role}>{formatPermissionRole(role)}</option>
+            ))}
+          </select>
+        </div>
+        <FormField
+          disabled={saving}
+          id="member-project-role"
+          label="프로젝트 역할"
+          maxLength={50}
+          onChange={(event) => setProjectRole(event.target.value)}
+          placeholder="예: 프론트엔드, QA"
+          value={projectRole}
+        />
+        {errorMessage ? <p className="form-field__error" role="alert">{errorMessage}</p> : null}
+        <div className="settings-actions settings-actions--end">
+          <Button disabled={saving} onClick={handleClose} variant="secondary">취소</Button>
+          <Button loading={saving} onClick={() => void handleSave()}>저장</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function InviteMemberModal({
+  onClose,
+  onFeedback,
+  onSuccess,
+  open,
+  projectId,
+}: {
+  onClose: () => void;
+  onFeedback: (message: string) => void;
+  onSuccess: () => void;
+  open: boolean;
+  projectId?: number;
+}) {
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [permissionRole, setPermissionRole] = useState<"MEMBER" | "VIEWER">("MEMBER");
+  const [projectRole, setProjectRole] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setInviteEmail("");
+    setPermissionRole("MEMBER");
+    setProjectRole("");
+    setEmailError("");
+  }, [open]);
+
+  const handleClose = () => {
+    if (!submitting) onClose();
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!projectId || submitting) return;
+
+    const trimmedEmail = inviteEmail.trim();
+    if (!trimmedEmail) {
+      setEmailError("이메일을 입력해주세요.");
+      return;
+    }
+    if (!EMAIL_PATTERN.test(trimmedEmail)) {
+      setEmailError("올바른 이메일 형식을 입력해주세요.");
+      return;
+    }
+
+    const body: {
+      inviteEmail: string;
+      permissionRole: "MEMBER" | "VIEWER";
+      projectRole?: string;
+    } = {
+      inviteEmail: trimmedEmail,
+      permissionRole,
+    };
+    const trimmedRole = projectRole.trim();
+    if (trimmedRole) body.projectRole = trimmedRole;
+
+    setSubmitting(true);
+    setEmailError("");
+    onFeedback("");
+
+    try {
+      await createProjectInvitation(projectId, body);
+      onSuccess();
+    } catch (error: unknown) {
+      const message = getInvitationFeedbackMessage(error, "팀원 초대에 실패했습니다.");
+      onFeedback(message);
+      setEmailError(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal
+      closeOnBackdrop={!submitting}
+      closeOnEscape={!submitting}
+      description="초대 이메일은 서버에서 발송합니다. 초대 링크는 응답에 포함되지 않습니다."
+      onClose={handleClose}
+      open={open}
+      title="팀원 초대"
+    >
+      <form className="settings-invite-dialog" onSubmit={handleSubmit}>
+        <FormField
+          disabled={submitting}
+          errorMessage={emailError}
+          id="invite-email"
+          label="이메일"
+          onChange={(event) => {
+            setInviteEmail(event.target.value);
+            setEmailError("");
+          }}
+          placeholder="member@example.com"
+          required
+          type="email"
+          value={inviteEmail}
+        />
+        <div className="form-field">
+          <label className="form-field__label" htmlFor="invite-permission-role">권한</label>
+          <select
+            className="ui-input"
+            disabled={submitting}
+            id="invite-permission-role"
+            onChange={(event) => setPermissionRole(event.target.value as "MEMBER" | "VIEWER")}
+            value={permissionRole}
+          >
+            {INVITE_PERMISSION_ROLES.map((role) => (
+              <option key={role} value={role}>{formatPermissionRole(role)}</option>
+            ))}
+          </select>
+        </div>
+        <FormField
+          disabled={submitting}
+          id="invite-project-role"
+          label="프로젝트 역할 (선택)"
+          maxLength={50}
+          onChange={(event) => setProjectRole(event.target.value)}
+          placeholder="예: 프론트엔드"
+          value={projectRole}
+        />
+        <div className="settings-actions settings-actions--end">
+          <Button disabled={submitting} onClick={handleClose} variant="secondary" type="button">
+            취소
+          </Button>
+          <Button loading={submitting} type="submit">초대 발송</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
