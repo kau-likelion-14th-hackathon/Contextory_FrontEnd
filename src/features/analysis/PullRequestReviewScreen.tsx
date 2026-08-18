@@ -156,11 +156,15 @@ export function PullRequestReviewScreen() {
   const [sourceRetryKey, setSourceRetryKey] = useState(0);
   const navigate = useNavigate();
   const routeReference = pullRequestId ?? analysisId ?? "";
+  const isPullRequestRoute = pullRequestId !== undefined;
+  const isAnalysisRoute = analysisId !== undefined;
   const validPullRequestId = pullRequestId && /^\d+$/.test(pullRequestId) && Number(pullRequestId) > 0
     ? pullRequestId
     : undefined;
 
   useEffect(() => {
+    if (!isPullRequestRoute) return;
+
     if (!validPullRequestId) {
       setSourceState("invalid");
       setPullRequest(undefined);
@@ -191,7 +195,7 @@ export function PullRequestReviewScreen() {
       });
 
     return () => controller.abort();
-  }, [projectId, sourceRetryKey, validPullRequestId]);
+  }, [isPullRequestRoute, projectId, sourceRetryKey, validPullRequestId]);
 
   const setViewState = (
     nextState: PullRequestReviewState,
@@ -234,7 +238,7 @@ export function PullRequestReviewScreen() {
   const copyDraft = async () => {
     const { draft } = pullRequestReviewMock;
     const content = [
-      `[${draft.recordType}] ${pullRequest?.title ?? "Pull Request"}`,
+      `[${draft.recordType}] ${isPullRequestRoute ? pullRequest?.title ?? "Pull Request" : `AI 분석 #${analysisId ?? ""}`}`,
       draft.summary,
       draft.purpose,
       `변경 전: ${draft.before}`,
@@ -262,7 +266,7 @@ export function PullRequestReviewScreen() {
     navigate(`/projects/${projectId}/github`);
   };
 
-  if (sourceState !== "success" || !pullRequest || !pullRequestFiles) {
+  if (isPullRequestRoute && (sourceState !== "success" || !pullRequest || !pullRequestFiles)) {
     return (
       <PullRequestSourceFeedback
         errorMessage={sourceError}
@@ -278,24 +282,29 @@ export function PullRequestReviewScreen() {
       <PageContainer size="full">
         <div className="pull-request-review__content">
           <ReviewHeader
+            analysisId={isAnalysisRoute ? analysisId : undefined}
             onAnalyze={startAnalysis}
             onApprove={approveReview}
-            pullRequest={pullRequest}
+            pullRequest={isPullRequestRoute ? pullRequest : undefined}
             projectId={projectId}
             state={viewState}
           />
 
           {viewState === "review" ? (
-            <ReviewWorkspace
-              files={pullRequestFiles}
-              followUps={followUps}
-              onToggleFollowUp={toggleFollowUp}
-              pullRequest={pullRequest}
-            />
+            isPullRequestRoute && pullRequest && pullRequestFiles ? (
+              <ReviewWorkspace
+                files={pullRequestFiles}
+                followUps={followUps}
+                onToggleFollowUp={toggleFollowUp}
+                pullRequest={pullRequest}
+              />
+            ) : (
+              <DraftPanel followUps={followUps} onToggleFollowUp={toggleFollowUp} />
+            )
           ) : (
             <ReviewStatePanel
               onAnalyze={startAnalysis}
-              pullRequest={pullRequest}
+              pullRequest={isPullRequestRoute ? pullRequest : undefined}
               projectId={projectId}
               state={viewState}
             />
@@ -354,36 +363,43 @@ export function PullRequestReviewScreen() {
 type ReviewHeaderProps = {
   state: PullRequestReviewState;
   projectId: string;
-  pullRequest: PullRequestDetail;
+  analysisId?: string;
+  pullRequest?: PullRequestDetail;
   onAnalyze: () => void;
   onApprove: () => void;
 };
 
-function ReviewHeader({ state, projectId, pullRequest, onAnalyze, onApprove }: ReviewHeaderProps) {
+function ReviewHeader({ state, projectId, analysisId, pullRequest, onAnalyze, onApprove }: ReviewHeaderProps) {
   const status = stateCopy[state];
 
   return (
     <header className="pull-request-review__header">
       <div className="pull-request-review__header-copy">
         <div>
-          <h1>PR #{pullRequest.prNumber} {pullRequest.title}</h1>
+          <h1>{pullRequest ? `PR #${pullRequest.prNumber} ${pullRequest.title}` : `AI 분석 #${analysisId ?? ""}`}</h1>
           <Badge variant={status.variant}>{status.label}</Badge>
         </div>
-        <p>
-          작성자 {pullRequest.authorLogin ?? "—"} · {formatPullRequestDate(pullRequest.createdAt)} · {getPullRequestStatus(pullRequest)} ·{" "}
-          <span className="branch-name">{pullRequest.sourceBranch ?? "—"} → {pullRequest.targetBranch ?? "—"}</span>
-        </p>
+        {pullRequest ? (
+          <p>
+            작성자 {pullRequest.authorLogin ?? "—"} · {formatPullRequestDate(pullRequest.createdAt)} · {getPullRequestStatus(pullRequest)} ·{" "}
+            <span className="branch-name">{pullRequest.sourceBranch ?? "—"} → {pullRequest.targetBranch ?? "—"}</span>
+          </p>
+        ) : (
+          <p>AI 분석 결과와 프로젝트 기록 초안을 검토합니다.</p>
+        )}
       </div>
       <div className="pull-request-review__header-actions">
-        <a
-          aria-label={`GitHub에서 Pull Request #${pullRequest.prNumber} 보기 (새 탭)`}
-          className="ui-button ui-button--secondary ui-button--sm"
-          href={pullRequest.htmlUrl}
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          GitHub에서 보기
-        </a>
+        {pullRequest ? (
+          <a
+            aria-label={`GitHub에서 Pull Request #${pullRequest.prNumber} 보기 (새 탭)`}
+            className="ui-button ui-button--secondary ui-button--sm"
+            href={pullRequest.htmlUrl}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            GitHub에서 보기
+          </a>
+        ) : null}
         {state === "approved" ? (
           <Link
             className="ui-button ui-button--secondary ui-button--sm"
@@ -699,7 +715,7 @@ type ReviewStatePanelProps = {
   state: Exclude<PullRequestReviewState, "review">;
   projectId: string;
   onAnalyze: () => void;
-  pullRequest: PullRequestDetail;
+  pullRequest?: PullRequestDetail;
 };
 
 function ReviewStatePanel({ state, projectId, onAnalyze, pullRequest }: ReviewStatePanelProps) {
@@ -736,15 +752,17 @@ function ReviewStatePanel({ state, projectId, onAnalyze, pullRequest }: ReviewSt
         </aside>
         <div className="pull-request-review__state-actions">
           <Button onClick={onAnalyze}>AI 재분석</Button>
-          <a
-            aria-label={`GitHub에서 Pull Request #${pullRequest.prNumber} 보기 (새 탭)`}
-            className="ui-button ui-button--secondary ui-button--md"
-            href={pullRequest.htmlUrl}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            GitHub에서 보기
-          </a>
+          {pullRequest ? (
+            <a
+              aria-label={`GitHub에서 Pull Request #${pullRequest.prNumber} 보기 (새 탭)`}
+              className="ui-button ui-button--secondary ui-button--md"
+              href={pullRequest.htmlUrl}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              GitHub에서 보기
+            </a>
+          ) : null}
         </div>
       </section>
     );
@@ -756,7 +774,7 @@ function ReviewStatePanel({ state, projectId, onAnalyze, pullRequest }: ReviewSt
       <h2 id="analysis-state-title">프로젝트 기록이 승인됐어요</h2>
       <p>검토한 내용이 공식 프로젝트 메모리에 저장되었습니다.</p>
       <article className="pull-request-review__approved-summary">
-        <h3>{pullRequest.title}</h3>
+        <h3>{pullRequest?.title ?? draft.summary}</h3>
         <p>승인자 · {approval.approver} · {approval.approvedAt}</p>
         <p>영향 역할 · {draft.impacts.map((impact) => impact.role).join(" / ")}</p>
       </article>
