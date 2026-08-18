@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { getApiErrorMessage } from "../../shared/api/client";
 import { PageContainer } from "../../shared/layouts";
-import { Badge, Button, Modal } from "../../shared/ui";
+import { Badge, Button, EmptyState, ErrorState, LoadingState, Modal } from "../../shared/ui";
+import {
+  getPullRequest,
+  getPullRequestApiErrorCode,
+  getPullRequestFiles,
+  type PullRequestDetail,
+  type PullRequestFilesResponse,
+} from "../github/pullRequestApi";
 import {
   pullRequestReviewMock,
   pullRequestReviewStates,
@@ -24,6 +32,112 @@ function isReviewState(value: string | null): value is PullRequestReviewState {
   return value !== null && pullRequestReviewStates.includes(value as PullRequestReviewState);
 }
 
+type PullRequestSourceState =
+  | "loading"
+  | "success"
+  | "invalid"
+  | "not-found"
+  | "no-repository"
+  | "github-connection-required"
+  | "error";
+
+function classifySourceError(error: unknown): PullRequestSourceState {
+  const code = getPullRequestApiErrorCode(error);
+  if (code === "PROJECT_REPOSITORY_4041") return "no-repository";
+  if (["GITHUB_4011", "GITHUB_4012", "GITHUB_4013"].includes(code ?? "")) {
+    return "github-connection-required";
+  }
+  if (code === "GITHUB_4041") return "not-found";
+  return "error";
+}
+
+function formatPullRequestDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value || "—";
+  return new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium" }).format(date);
+}
+
+function getPullRequestStatus(pullRequest: PullRequestDetail) {
+  if (pullRequest.merged) return "병합됨";
+  const state = pullRequest.state.toLowerCase() === "open" ? "열림" : "닫힘";
+  return pullRequest.draft ? `Draft · ${state}` : state;
+}
+
+type PullRequestSourceFeedbackProps = {
+  state: Exclude<PullRequestSourceState, "success">;
+  projectId: string;
+  errorMessage: string;
+  onRetry: () => void;
+};
+
+function PullRequestSourceFeedback({
+  state,
+  projectId,
+  errorMessage,
+  onRetry,
+}: PullRequestSourceFeedbackProps) {
+  let content: React.ReactNode;
+
+  if (state === "loading") {
+    content = (
+      <LoadingState
+        description="Pull Request 상세와 변경 파일을 확인하고 있습니다."
+        title="Pull Request를 불러오는 중입니다"
+      />
+    );
+  } else if (state === "no-repository") {
+    content = (
+      <EmptyState
+        description="Pull Request를 확인하려면 프로젝트에 GitHub 저장소를 연결해야 합니다."
+        details={(
+          <Link className="ui-button ui-button--primary ui-button--md" to={`/projects/${projectId}/settings?tab=github`}>
+            GitHub 저장소 설정
+          </Link>
+        )}
+        title="GitHub 저장소를 연결해주세요"
+      />
+    );
+  } else if (state === "github-connection-required") {
+    content = (
+      <ErrorState
+        description="GitHub 연결이 만료되었거나 접근 권한을 확인할 수 없습니다. GitHub App을 다시 연결해주세요."
+        details={(
+          <Link className="ui-button ui-button--primary ui-button--md" to={`/projects/${projectId}/settings?tab=github`}>
+            GitHub 연결 설정
+          </Link>
+        )}
+        title="GitHub 연결이 필요합니다"
+      />
+    );
+  } else if (state === "not-found" || state === "invalid") {
+    content = (
+      <EmptyState
+        description={state === "invalid" ? "유효한 Pull Request 번호가 필요합니다." : "저장소에서 해당 Pull Request를 찾을 수 없습니다."}
+        details={(
+          <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
+            GitHub 작업 목록
+          </Link>
+        )}
+        title="Pull Request를 찾을 수 없습니다"
+      />
+    );
+  } else {
+    content = (
+      <ErrorState
+        action={{ label: "다시 시도", onClick: onRetry }}
+        description={errorMessage || "잠시 후 다시 시도해주세요."}
+        title="Pull Request를 불러오지 못했습니다"
+      />
+    );
+  }
+
+  return (
+    <main className="pull-request-review pull-request-review--source-state">
+      <PageContainer size="full">{content}</PageContainer>
+    </main>
+  );
+}
+
 export function PullRequestReviewScreen() {
   const { projectId = "", pullRequestId, analysisId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,8 +149,49 @@ export function PullRequestReviewScreen() {
   const [followUps, setFollowUps] = useState<ReviewFollowUp[]>(
     pullRequestReviewMock.draft.followUps,
   );
+  const [sourceState, setSourceState] = useState<PullRequestSourceState>("loading");
+  const [sourceError, setSourceError] = useState("");
+  const [pullRequest, setPullRequest] = useState<PullRequestDetail>();
+  const [pullRequestFiles, setPullRequestFiles] = useState<PullRequestFilesResponse>();
+  const [sourceRetryKey, setSourceRetryKey] = useState(0);
   const navigate = useNavigate();
-  const routeReference = pullRequestId ?? analysisId ?? String(pullRequestReviewMock.pullRequest.number);
+  const routeReference = pullRequestId ?? analysisId ?? "";
+  const validPullRequestId = pullRequestId && /^\d+$/.test(pullRequestId) && Number(pullRequestId) > 0
+    ? pullRequestId
+    : undefined;
+
+  useEffect(() => {
+    if (!validPullRequestId) {
+      setSourceState("invalid");
+      setPullRequest(undefined);
+      setPullRequestFiles(undefined);
+      return;
+    }
+
+    const controller = new AbortController();
+    setSourceState("loading");
+    setSourceError("");
+
+    void Promise.all([
+      getPullRequest(projectId, validPullRequestId, controller.signal),
+      getPullRequestFiles(projectId, validPullRequestId, controller.signal),
+    ])
+      .then(([detail, files]) => {
+        if (controller.signal.aborted) return;
+        setPullRequest(detail);
+        setPullRequestFiles(files);
+        setSourceState("success");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setPullRequest(undefined);
+        setPullRequestFiles(undefined);
+        setSourceState(classifySourceError(error));
+        setSourceError(getApiErrorMessage(error, "Pull Request 원본 정보를 불러오지 못했습니다."));
+      });
+
+    return () => controller.abort();
+  }, [projectId, sourceRetryKey, validPullRequestId]);
 
   const setViewState = (
     nextState: PullRequestReviewState,
@@ -79,7 +234,7 @@ export function PullRequestReviewScreen() {
   const copyDraft = async () => {
     const { draft } = pullRequestReviewMock;
     const content = [
-      `[${draft.recordType}] ${pullRequestReviewMock.pullRequest.title}`,
+      `[${draft.recordType}] ${pullRequest?.title ?? "Pull Request"}`,
       draft.summary,
       draft.purpose,
       `변경 전: ${draft.before}`,
@@ -107,6 +262,17 @@ export function PullRequestReviewScreen() {
     navigate(`/projects/${projectId}/github`);
   };
 
+  if (sourceState !== "success" || !pullRequest || !pullRequestFiles) {
+    return (
+      <PullRequestSourceFeedback
+        errorMessage={sourceError}
+        onRetry={() => setSourceRetryKey((key) => key + 1)}
+        projectId={projectId}
+        state={sourceState === "success" ? "error" : sourceState}
+      />
+    );
+  }
+
   return (
     <main className="pull-request-review" data-route-reference={routeReference}>
       <PageContainer size="full">
@@ -114,15 +280,22 @@ export function PullRequestReviewScreen() {
           <ReviewHeader
             onAnalyze={startAnalysis}
             onApprove={approveReview}
+            pullRequest={pullRequest}
             projectId={projectId}
             state={viewState}
           />
 
           {viewState === "review" ? (
-            <ReviewWorkspace followUps={followUps} onToggleFollowUp={toggleFollowUp} />
+            <ReviewWorkspace
+              files={pullRequestFiles}
+              followUps={followUps}
+              onToggleFollowUp={toggleFollowUp}
+              pullRequest={pullRequest}
+            />
           ) : (
             <ReviewStatePanel
               onAnalyze={startAnalysis}
+              pullRequest={pullRequest}
               projectId={projectId}
               state={viewState}
             />
@@ -181,31 +354,31 @@ export function PullRequestReviewScreen() {
 type ReviewHeaderProps = {
   state: PullRequestReviewState;
   projectId: string;
+  pullRequest: PullRequestDetail;
   onAnalyze: () => void;
   onApprove: () => void;
 };
 
-function ReviewHeader({ state, projectId, onAnalyze, onApprove }: ReviewHeaderProps) {
-  const { pullRequest } = pullRequestReviewMock;
+function ReviewHeader({ state, projectId, pullRequest, onAnalyze, onApprove }: ReviewHeaderProps) {
   const status = stateCopy[state];
 
   return (
     <header className="pull-request-review__header">
       <div className="pull-request-review__header-copy">
         <div>
-          <h1>PR #{pullRequest.number} {pullRequest.title}</h1>
+          <h1>PR #{pullRequest.prNumber} {pullRequest.title}</h1>
           <Badge variant={status.variant}>{status.label}</Badge>
         </div>
         <p>
-          작성자 {pullRequest.author} · {pullRequest.createdAt} · {pullRequest.githubStatus} ·{" "}
-          <span className="branch-name">{pullRequest.headBranch} → {pullRequest.baseBranch}</span>
+          작성자 {pullRequest.authorLogin ?? "—"} · {formatPullRequestDate(pullRequest.createdAt)} · {getPullRequestStatus(pullRequest)} ·{" "}
+          <span className="branch-name">{pullRequest.sourceBranch ?? "—"} → {pullRequest.targetBranch ?? "—"}</span>
         </p>
       </div>
       <div className="pull-request-review__header-actions">
         <a
-          aria-label={`GitHub에서 Pull Request #${pullRequest.number} 보기 (새 탭)`}
+          aria-label={`GitHub에서 Pull Request #${pullRequest.prNumber} 보기 (새 탭)`}
           className="ui-button ui-button--secondary ui-button--sm"
-          href={pullRequest.githubUrl}
+          href={pullRequest.htmlUrl}
           rel="noopener noreferrer"
           target="_blank"
         >
@@ -236,56 +409,200 @@ type ReviewWorkspaceProps = {
   onToggleFollowUp: (id: string) => void;
 };
 
-function ReviewWorkspace({ followUps, onToggleFollowUp }: ReviewWorkspaceProps) {
+type ReviewWorkspaceDataProps = ReviewWorkspaceProps & {
+  pullRequest: PullRequestDetail;
+  files: PullRequestFilesResponse;
+};
+
+function ReviewWorkspace({ files, followUps, onToggleFollowUp, pullRequest }: ReviewWorkspaceDataProps) {
   return (
     <div className="pull-request-review__columns">
-      <GitHubSourcePanel />
+      <GitHubSourcePanel files={files} pullRequest={pullRequest} />
       <DraftPanel followUps={followUps} onToggleFollowUp={onToggleFollowUp} />
     </div>
   );
 }
 
-function GitHubSourcePanel() {
-  const { pullRequest, files, diff } = pullRequestReviewMock;
+function getDiffLineClass(line: string) {
+  if (line.startsWith("+") && !line.startsWith("+++")) return "added";
+  if (line.startsWith("-") && !line.startsWith("---")) return "removed";
+  return "context";
+}
+
+const DEFAULT_VISIBLE_FILES = 10;
+const FILE_LOAD_STEP = 10;
+
+function GitHubSourcePanel({
+  pullRequest,
+  files,
+}: {
+  pullRequest: PullRequestDetail;
+  files: PullRequestFilesResponse;
+}) {
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(() => new Set());
+  const [fullyExpandedDiffs, setFullyExpandedDiffs] = useState<Set<string>>(() => new Set());
+  const [visibleFileCount, setVisibleFileCount] = useState(DEFAULT_VISIBLE_FILES);
+  const visibleFiles = files.files.slice(0, visibleFileCount);
+  const remainingFileCount = Math.max(files.files.length - visibleFiles.length, 0);
+
+  const toggleFile = (filename: string) => {
+    const closing = expandedFiles.has(filename);
+    setExpandedFiles((current) => {
+      const next = new Set(current);
+      if (closing) next.delete(filename);
+      else next.add(filename);
+      return next;
+    });
+
+    if (closing) {
+      setFullyExpandedDiffs((current) => {
+        const next = new Set(current);
+        next.delete(filename);
+        return next;
+      });
+    }
+  };
+
+  const toggleFullDiff = (filename: string) => {
+    setFullyExpandedDiffs((current) => {
+      const next = new Set(current);
+      if (next.has(filename)) next.delete(filename);
+      else next.add(filename);
+      return next;
+    });
+  };
+
+  const showMoreFiles = () => {
+    setVisibleFileCount((current) => Math.min(current + FILE_LOAD_STEP, files.files.length));
+  };
+
+  const collapseFileList = () => {
+    const hiddenFilenames = new Set(
+      files.files.slice(DEFAULT_VISIBLE_FILES).map((file) => file.filename),
+    );
+    const removeHiddenFiles = (current: Set<string>) => new Set(
+      [...current].filter((filename) => !hiddenFilenames.has(filename)),
+    );
+
+    setExpandedFiles(removeHiddenFiles);
+    setFullyExpandedDiffs(removeHiddenFiles);
+    setVisibleFileCount(DEFAULT_VISIBLE_FILES);
+  };
 
   return (
     <section className="pull-request-review__panel pull-request-review__source" aria-labelledby="github-source-title">
       <div className="pull-request-review__source-tabs">
         <strong id="github-source-title">GitHub 원본</strong>
-        <span>파일 변경 {files.length}</span>
-        <span>커밋 {pullRequest.commitCount}</span>
-        <span>관련 이슈 {pullRequest.relatedIssueCount}</span>
+        <span>커밋 {pullRequest.commits ?? "—"}</span>
       </div>
 
       <div className="pull-request-review__summary">
         <h2>PR 설명</h2>
-        <p>{pullRequest.description}</p>
+        <p>{pullRequest.body?.trim() || "PR 설명이 없습니다."}</p>
       </div>
 
       <section className="pull-request-review__files" aria-labelledby="changed-files-title">
-        <h2 id="changed-files-title">변경된 파일 ({files.length})</h2>
+        <header className="pull-request-review__files-header">
+          <h2 id="changed-files-title">변경된 파일</h2>
+          <div aria-label={`${files.totalFiles}개 파일 변경, ${files.totalAdditions}줄 추가, ${files.totalDeletions}줄 삭제`}>
+            <span>{files.totalFiles} files changed</span>
+            <b>+{files.totalAdditions}</b>
+            <i>-{files.totalDeletions}</i>
+          </div>
+        </header>
         <ul>
-          {files.slice(0, 4).map((file) => (
-            <li key={file.path}>
-              <code>{file.path}</code>
-              <span><b>+{file.additions}</b> <i>-{file.deletions}</i></span>
-            </li>
-          ))}
-        </ul>
-      </section>
+          {visibleFiles.map((file, index) => {
+            const isExpanded = expandedFiles.has(file.filename);
+            const isFullyExpanded = fullyExpandedDiffs.has(file.filename);
+            const diffLines = isExpanded ? file.patch?.split(/\r?\n/) ?? [] : [];
+            const hasLongDiff = diffLines.length > 12;
+            const buttonId = `pull-request-file-${index}`;
+            const panelId = `pull-request-file-diff-${index}`;
 
-      <section className="pull-request-review__diff" aria-labelledby="diff-title">
-        <h2 id="diff-title">Diff 미리보기 · <code>{diff.path}</code></h2>
-        <div className="pull-request-review__diff-code">
-          {diff.lines.map((line) => (
-            <div
-              className={`pull-request-review__diff-line pull-request-review__diff-line--${line.marker === "+" ? "added" : line.marker === "-" ? "removed" : "context"}`}
-              key={`${line.lineNumber}-${line.marker}`}
-            >
-              <code>{line.lineNumber} {line.marker} {line.content}</code>
-            </div>
-          ))}
-        </div>
+            return (
+              <li className="pull-request-review__file" key={file.filename}>
+                <button
+                  aria-controls={panelId}
+                  aria-expanded={isExpanded}
+                  className="pull-request-review__file-toggle"
+                  id={buttonId}
+                  onClick={() => toggleFile(file.filename)}
+                  type="button"
+                >
+                  <span className="pull-request-review__file-name">
+                    <code>{file.filename}</code>
+                    {file.previousFilename ? <small>이전 경로 · {file.previousFilename}</small> : null}
+                  </span>
+                  <span className="pull-request-review__file-meta">
+                    <em>{file.status}</em>
+                    <b>+{file.additions ?? "—"}</b>
+                    <i>-{file.deletions ?? "—"}</i>
+                    <span aria-hidden="true" className="pull-request-review__file-chevron">
+                      {isExpanded ? "▴" : "▾"}
+                    </span>
+                  </span>
+                </button>
+
+                {isExpanded ? (
+                  <div
+                    aria-labelledby={buttonId}
+                    className="pull-request-review__file-diff"
+                    id={panelId}
+                    role="region"
+                  >
+                    {hasLongDiff ? (
+                      <button
+                        aria-expanded={isFullyExpanded}
+                        className="pull-request-review__diff-toggle"
+                        onClick={() => toggleFullDiff(file.filename)}
+                        type="button"
+                      >
+                        {isFullyExpanded ? "접기" : "더 보기"}
+                      </button>
+                    ) : null}
+
+                    {diffLines.length > 0 ? (
+                      <div
+                        className={[
+                          "pull-request-review__diff-code",
+                          isFullyExpanded ? "pull-request-review__diff-code--expanded" : "",
+                        ].filter(Boolean).join(" ")}
+                      >
+                        {diffLines.map((line, lineIndex) => (
+                          <div
+                            className={`pull-request-review__diff-line pull-request-review__diff-line--${getDiffLineClass(line)}`}
+                            key={`${lineIndex}-${line}`}
+                          >
+                            <code>{line || " "}</code>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="pull-request-review__diff-empty">
+                        GitHub에서 이 파일의 diff를 제공하지 않습니다.
+                      </p>
+                    )}
+
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+        {remainingFileCount > 0 || visibleFileCount > DEFAULT_VISIBLE_FILES ? (
+          <div className="pull-request-review__file-list-controls">
+            {remainingFileCount > 0 ? (
+              <Button onClick={showMoreFiles} size="sm" variant="secondary">
+                더 보기 ({remainingFileCount}개 남음)
+              </Button>
+            ) : null}
+            {visibleFileCount > DEFAULT_VISIBLE_FILES ? (
+              <Button onClick={collapseFileList} size="sm" variant="ghost">
+                접기
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </section>
     </section>
   );
@@ -382,10 +699,11 @@ type ReviewStatePanelProps = {
   state: Exclude<PullRequestReviewState, "review">;
   projectId: string;
   onAnalyze: () => void;
+  pullRequest: PullRequestDetail;
 };
 
-function ReviewStatePanel({ state, projectId, onAnalyze }: ReviewStatePanelProps) {
-  const { analysisStages, approval, draft, failure, pullRequest } = pullRequestReviewMock;
+function ReviewStatePanel({ state, projectId, onAnalyze, pullRequest }: ReviewStatePanelProps) {
+  const { analysisStages, approval, draft, failure } = pullRequestReviewMock;
 
   if (state === "analyzing") {
     return (
@@ -419,9 +737,9 @@ function ReviewStatePanel({ state, projectId, onAnalyze }: ReviewStatePanelProps
         <div className="pull-request-review__state-actions">
           <Button onClick={onAnalyze}>AI 재분석</Button>
           <a
-            aria-label={`GitHub에서 Pull Request #${pullRequest.number} 보기 (새 탭)`}
+            aria-label={`GitHub에서 Pull Request #${pullRequest.prNumber} 보기 (새 탭)`}
             className="ui-button ui-button--secondary ui-button--md"
-            href={pullRequest.githubUrl}
+            href={pullRequest.htmlUrl}
             rel="noopener noreferrer"
             target="_blank"
           >
