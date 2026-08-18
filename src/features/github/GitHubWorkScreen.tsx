@@ -1,109 +1,98 @@
-import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useOutletContext, useParams } from "react-router-dom";
+import { getApiErrorMessage } from "../../shared/api/client";
 import { PageContainer } from "../../shared/layouts";
-import {
-  Button,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  Pagination,
-  SearchInput,
-} from "../../shared/ui";
+import { Button, EmptyState, ErrorState, LoadingState } from "../../shared/ui";
+import type { ProjectWorkspaceContextValue } from "../workspace/WorkspaceShell";
 import { PullRequestRow } from "./components";
 import {
-  DEFAULT_GITHUB_WORK_STATE,
-  analysisFilters,
-  analysisStatusVariants,
-  githubPullRequestsMock,
-  githubStatusVariants,
-  githubWorkViewStates,
-  type AnalysisFilter,
-  type GitHubWorkViewState,
-} from "./githubWorkMock";
+  getPullRequestApiErrorCode,
+  getPullRequests,
+  type PullRequestListResponse,
+  type PullRequestState,
+} from "./pullRequestApi";
 import "./GitHubWorkScreen.css";
 
 const PAGE_SIZE = 7;
 
-function isGitHubWorkViewState(value: string | null): value is GitHubWorkViewState {
-  return value !== null && githubWorkViewStates.includes(value as GitHubWorkViewState);
+const stateFilters: Array<{ label: string; value: PullRequestState }> = [
+  { label: "열림", value: "OPEN" },
+  { label: "닫힘", value: "CLOSED" },
+  { label: "전체", value: "ALL" },
+];
+
+type GitHubWorkRequestState =
+  | "loading"
+  | "success"
+  | "empty"
+  | "no-repository"
+  | "github-connection-required"
+  | "error";
+
+function getGitHubStatus(state: string, draft: boolean) {
+  const stateLabel = state.toLowerCase() === "open" ? "열림" : "닫힘";
+  return draft ? `Draft · ${stateLabel}` : stateLabel;
+}
+
+function formatUpdatedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value || "—";
+  return new Intl.DateTimeFormat("ko-KR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function classifyRequestError(error: unknown): GitHubWorkRequestState {
+  const code = getPullRequestApiErrorCode(error);
+  if (code === "PROJECT_REPOSITORY_4041") return "no-repository";
+  if (["GITHUB_4011", "GITHUB_4012", "GITHUB_4013"].includes(code ?? "")) {
+    return "github-connection-required";
+  }
+  return "error";
 }
 
 export function GitHubWorkScreen() {
   const { projectId = "" } = useParams();
-  const [searchParams] = useSearchParams();
-  const stateParam = searchParams.get("state");
-  const queryState = isGitHubWorkViewState(stateParam)
-    ? stateParam
-    : DEFAULT_GITHUB_WORK_STATE;
-  const [viewState, setViewState] = useState<GitHubWorkViewState>(queryState);
-  const [searchTerm, setSearchTerm] = useState(queryState === "search-empty" ? "login" : "");
-  const [analysisFilter, setAnalysisFilter] = useState<AnalysisFilter>("전체");
+  const { project } = useOutletContext<ProjectWorkspaceContextValue>();
+  const [pullRequestState, setPullRequestState] = useState<PullRequestState>("OPEN");
   const [currentPage, setCurrentPage] = useState(1);
-  const [syncStartedLocally, setSyncStartedLocally] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+  const [requestState, setRequestState] = useState<GitHubWorkRequestState>("loading");
+  const [result, setResult] = useState<PullRequestListResponse>();
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    setViewState(queryState);
-    setSearchTerm(queryState === "search-empty" ? "login" : "");
-    setAnalysisFilter("전체");
-    setCurrentPage(1);
-    setSyncStartedLocally(false);
-  }, [queryState]);
+    const controller = new AbortController();
+    setRequestState("loading");
+    setErrorMessage("");
 
-  useEffect(() => {
-    if (!syncStartedLocally || viewState !== "syncing") return;
+    void getPullRequests(
+      projectId,
+      { page: currentPage, size: PAGE_SIZE, state: pullRequestState },
+      controller.signal,
+    )
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        if (response.content.length === 0 && currentPage > 1) {
+          setCurrentPage((page) => Math.max(1, page - 1));
+          return;
+        }
+        setResult(response);
+        setRequestState(response.content.length === 0 ? "empty" : "success");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setResult(undefined);
+        setRequestState(classifyRequestError(error));
+        setErrorMessage(getApiErrorMessage(error, "Pull Request 목록을 불러오지 못했습니다."));
+      });
 
-    const timer = window.setTimeout(() => {
-      setViewState("success");
-      setSyncStartedLocally(false);
-    }, 1600);
+    return () => controller.abort();
+  }, [currentPage, projectId, pullRequestState, retryKey]);
 
-    return () => window.clearTimeout(timer);
-  }, [syncStartedLocally, viewState]);
-
-  const filteredPullRequests = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLocaleLowerCase("ko-KR");
-
-    return githubPullRequestsMock.filter((pullRequest) => {
-      const matchesSearch = !normalizedSearch || [
-        pullRequest.title,
-        String(pullRequest.number),
-        `#${pullRequest.number}`,
-        pullRequest.author,
-      ].some((value) => value.toLocaleLowerCase("ko-KR").includes(normalizedSearch));
-      const matchesStatus = analysisFilter === "전체"
-        || pullRequest.analysisStatus === analysisFilter;
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [analysisFilter, searchTerm]);
-
-  const resultState = viewState === "success" && filteredPullRequests.length === 0
-    ? "search-empty"
-    : viewState;
-  const totalPages = Math.max(1, Math.ceil(filteredPullRequests.length / PAGE_SIZE));
-  const pageItems = filteredPullRequests.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE,
-  );
-  const showFilters = !["no-repository", "loading"].includes(resultState);
-
-  const startSync = () => {
-    setSyncStartedLocally(true);
-    setViewState("syncing");
-  };
-
-  const updateSearch = (value: string) => {
-    setSearchTerm(value);
-    setCurrentPage(1);
-    if (viewState === "search-empty") setViewState("success");
-  };
-
-  const resetSearch = () => {
-    setSearchTerm("");
-    setAnalysisFilter("전체");
-    setCurrentPage(1);
-    setViewState("success");
-  };
+  const refresh = () => setRetryKey((key) => key + 1);
+  const repositoryName = project?.repository?.repositoryFullName?.trim() || "연결된 저장소 없음";
 
   return (
     <main className="github-work">
@@ -112,110 +101,103 @@ export function GitHubWorkScreen() {
           <header className="github-work__header">
             <div>
               <h1>GitHub 작업 목록</h1>
-              <p>연결된 저장소의 Pull Request를 확인하고 AI 분석과 리뷰를 관리하세요.</p>
+              <p>연결된 저장소의 Pull Request 원본 정보를 확인하세요.</p>
             </div>
             <Button
-              aria-label="GitHub Pull Request 지금 동기화"
-              disabled={resultState === "syncing"}
-              onClick={startSync}
+              aria-label="GitHub Pull Request 목록 새로고침"
+              loading={requestState === "loading"}
+              onClick={refresh}
             >
-              <span aria-hidden="true">↻</span> {resultState === "syncing" ? "동기화 중" : "지금 동기화"}
+              <span aria-hidden="true">↻</span> 새로고침
             </Button>
           </header>
 
-          {showFilters ? (
-            <section className="github-work__filters" aria-label="GitHub 작업 검색 및 필터">
-              <SearchInput
-                aria-label="PR 제목, 번호, 작성자 검색"
-                onChange={(event) => updateSearch(event.target.value)}
-                onClear={() => updateSearch("")}
-                placeholder="PR 제목, 번호, 작성자 검색..."
-                value={searchTerm}
-              />
-              <div className="github-work__repository-filter">
-                <span className="github-work__repository-filter-label">연결된 저장소</span>
-                <span className="github-work__repository-filter-value">team/contextory-web</span>
-              </div>
-              <div className="github-work__filter-chips" aria-label="AI 분석 상태 필터">
-                {analysisFilters.map((filter) => (
-                  <button
-                    aria-pressed={analysisFilter === filter}
-                    className="github-work__filter-chip"
-                    key={filter}
-                    onClick={() => {
-                      setAnalysisFilter(filter);
-                      setCurrentPage(1);
-                      if (viewState === "search-empty") setViewState("success");
-                    }}
-                    type="button"
-                  >
-                    {filter}
-                  </button>
-                ))}
-              </div>
-            </section>
-          ) : null}
+          <section className="github-work__filters" aria-label="GitHub Pull Request 필터">
+            <div className="github-work__repository-filter">
+              <span className="github-work__repository-filter-label">연결된 저장소</span>
+              <span className="github-work__repository-filter-value">{repositoryName}</span>
+            </div>
+            <div className="github-work__filter-chips" aria-label="GitHub Pull Request 상태 필터">
+              {stateFilters.map((filter) => (
+                <button
+                  aria-pressed={pullRequestState === filter.value}
+                  className="github-work__filter-chip"
+                  key={filter.value}
+                  onClick={() => {
+                    setPullRequestState(filter.value);
+                    setCurrentPage(1);
+                  }}
+                  type="button"
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          </section>
 
           <section
-            className={`github-work__panel github-work__panel--${resultState}`}
+            className={`github-work__panel github-work__panel--${requestState}`}
             aria-label="Pull Request 목록 및 상태"
           >
-            {resultState === "success" ? (
+            {requestState === "success" && result ? (
               <>
                 <div className="github-work__table-header" aria-hidden="true">
                   <span>PR / 제목</span>
                   <span>작성자</span>
                   <span>상태</span>
                   <span>브랜치</span>
-                  <span>파일</span>
-                  <span>변경 통계</span>
-                  <span>AI 상태</span>
+                  <span>업데이트</span>
                   <span>작업</span>
                 </div>
                 <div className="github-work__list">
-                  {pageItems.map((pullRequest) => (
+                  {result.content.map((pullRequest) => (
                     <PullRequestRow
-                      actionLabel={pullRequest.githubStatus === "닫힘" || pullRequest.githubStatus === "병합됨" ? "보기" : "열기"}
-                      actionTo={`/projects/${projectId}/github/pulls/${pullRequest.number}`}
-                      additions={pullRequest.additions}
-                      analysisStatus={pullRequest.analysisStatus}
-                      analysisStatusVariant={analysisStatusVariants[pullRequest.analysisStatus]}
-                      author={pullRequest.author}
-                      baseBranch={pullRequest.baseBranch}
-                      deletions={pullRequest.deletions}
-                      filesChanged={pullRequest.changedFiles}
-                      githubStatus={pullRequest.githubStatus}
-                      githubStatusVariant={githubStatusVariants[pullRequest.githubStatus]}
-                      headBranch={pullRequest.headBranch}
-                      key={pullRequest.number}
-                      number={pullRequest.number}
-                      status={pullRequest.analysisStatus}
+                      actionLabel="보기"
+                      actionTo={`/projects/${projectId}/github/pulls/${pullRequest.prNumber}`}
+                      author={pullRequest.authorLogin ?? "—"}
+                      baseBranch={pullRequest.targetBranch ?? undefined}
+                      githubStatus={getGitHubStatus(pullRequest.state, pullRequest.draft)}
+                      githubStatusVariant={pullRequest.draft ? "info" : pullRequest.state.toLowerCase() === "open" ? "success" : "neutral"}
+                      headBranch={pullRequest.sourceBranch ?? undefined}
+                      key={pullRequest.prNumber}
+                      number={pullRequest.prNumber}
+                      status={pullRequest.state}
                       title={pullRequest.title}
-                      updatedAt="방금 전"
+                      updatedAt={formatUpdatedAt(pullRequest.updatedAt)}
                     />
                   ))}
                 </div>
                 <footer className="github-work__pagination">
-                  <p>
-                    전체 {filteredPullRequests.length}개 중{" "}
-                    {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredPullRequests.length)}개 표시
-                  </p>
-                  <Pagination
-                    ariaLabel="Pull Request 목록 페이지"
-                    currentPage={currentPage}
-                    nextLabel="다음 페이지"
-                    onPageChange={setCurrentPage}
-                    previousLabel="이전 페이지"
-                    totalPages={totalPages}
-                  />
+                  <p>페이지 {result.page} · 현재 {result.content.length}개</p>
+                  <nav aria-label="Pull Request 목록 페이지" className="github-work__pagination-controls">
+                    <Button
+                      aria-label="이전 Pull Request 페이지"
+                      disabled={currentPage <= 1}
+                      onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      이전
+                    </Button>
+                    <span aria-current="page">{result.page}</span>
+                    <Button
+                      aria-label="다음 Pull Request 페이지"
+                      disabled={!result.hasNext}
+                      onClick={() => setCurrentPage((page) => page + 1)}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      다음
+                    </Button>
+                  </nav>
                 </footer>
               </>
             ) : (
               <GitHubWorkFeedback
-                onReset={resetSearch}
-                onRetry={startSync}
-                onSuccess={() => setViewState("success")}
-                state={resultState}
+                errorMessage={errorMessage}
+                onRetry={refresh}
+                projectId={projectId}
+                state={requestState === "success" ? "error" : requestState}
               />
             )}
           </section>
@@ -226,29 +208,41 @@ export function GitHubWorkScreen() {
 }
 
 type GitHubWorkFeedbackProps = {
-  state: Exclude<GitHubWorkViewState, "success">;
-  onReset: () => void;
+  state: Exclude<GitHubWorkRequestState, "success">;
+  projectId: string;
+  errorMessage: string;
   onRetry: () => void;
-  onSuccess: () => void;
 };
 
-function GitHubWorkFeedback({ state, onReset, onRetry, onSuccess }: GitHubWorkFeedbackProps) {
+function GitHubWorkFeedback({ state, projectId, errorMessage, onRetry }: GitHubWorkFeedbackProps) {
   if (state === "loading") {
-    return <LoadingState title="GitHub 작업을 불러오는 중입니다" description="수집된 Pull Request 목록을 확인하고 있습니다." />;
+    return <LoadingState title="GitHub 작업을 불러오는 중입니다" description="Pull Request 목록을 확인하고 있습니다." />;
   }
 
   if (state === "no-repository") {
     return (
       <EmptyState
-        action={{ label: "저장소 연결하기", onClick: onSuccess }}
         description="PR을 불러오려면 먼저 프로젝트에 GitHub 저장소를 연결해야 합니다."
-        details={
-          <aside className="github-work__state-info github-work__state-info--note" aria-label="저장소 연결 안내">
-            <strong>GitHub 로그인 계정과 프로젝트 저장소 연결은 별도입니다.</strong>
-            <span>팀 및 설정 → GitHub 저장소에서 연결할 수 있어요.</span>
-          </aside>
-        }
+        details={(
+          <Link className="ui-button ui-button--primary ui-button--md" to={`/projects/${projectId}/settings?tab=github`}>
+            GitHub 저장소 설정
+          </Link>
+        )}
         title="GitHub 저장소를 연결해주세요"
+      />
+    );
+  }
+
+  if (state === "github-connection-required") {
+    return (
+      <ErrorState
+        description="GitHub 연결이 만료되었거나 접근 권한을 확인할 수 없습니다. GitHub App을 다시 연결해주세요."
+        details={(
+          <Link className="ui-button ui-button--primary ui-button--md" to={`/projects/${projectId}/settings?tab=github`}>
+            GitHub 연결 설정
+          </Link>
+        )}
+        title="GitHub 연결이 필요합니다"
       />
     );
   }
@@ -256,60 +250,17 @@ function GitHubWorkFeedback({ state, onReset, onRetry, onSuccess }: GitHubWorkFe
   if (state === "empty") {
     return (
       <EmptyState
-        action={{ label: "지금 동기화", onClick: onRetry }}
-        description="연결된 저장소에 PR이 생성되면 여기에서 AI 분석을 시작할 수 있습니다."
-        title="아직 수집된 Pull Request가 없어요"
-      />
-    );
-  }
-
-  if (state === "syncing") {
-    return (
-      <LoadingState
-        description="연결된 저장소에서 최신 Pull Request와 커밋을 확인하고 있습니다. 잠시만 기다려주세요."
-        details={
-          <div className="github-work__state-info github-work__state-info--progress" aria-label="동기화 진행 단계">
-            <strong><span aria-hidden="true">○</span> 저장소 권한 확인 완료</strong>
-            <strong><span aria-hidden="true">○</span> 최신 PR / Commit 불러오는 중</strong>
-            <span>완료되면 목록이 자동으로 갱신됩니다.</span>
-          </div>
-        }
-        title="GitHub 변경을 동기화하고 있어요"
-      />
-    );
-  }
-
-  if (state === "sync-failed") {
-    return (
-      <ErrorState
-        action={{ label: "다시 동기화", onClick: onRetry }}
-        description="저장소 권한 또는 일시적인 API 오류로 PR을 가져오지 못했습니다."
-        details={
-          <div className="github-work__state-info github-work__state-info--error" role="note">
-            <strong>마지막 성공 동기화 · 23분 전</strong>
-            <span>권한을 다시 확인한 뒤 재시도하세요. 반복되면 저장소 연결을 다시 설정할 수 있습니다.</span>
-          </div>
-        }
-        secondaryAction={{ label: "저장소 설정", onClick: onSuccess }}
-        title="GitHub 동기화에 실패했어요"
-      />
-    );
-  }
-
-  if (state === "search-empty") {
-    return (
-      <EmptyState
-        action={{ label: "검색 조건 초기화", onClick: onReset }}
-        description="입력한 조건과 일치하는 Pull Request가 없습니다. 검색어나 상태 필터를 변경해보세요."
-        title="검색 결과가 없어요"
+        action={{ label: "목록 새로고침", onClick: onRetry }}
+        description="현재 조건에 해당하는 Pull Request가 없습니다."
+        title="Pull Request가 없습니다"
       />
     );
   }
 
   return (
     <ErrorState
-      action={{ label: "다시 시도", onClick: onSuccess }}
-      description="잠시 후 다시 시도해주세요. 현재 화면은 개발용 mock 상태입니다."
+      action={{ label: "다시 시도", onClick: onRetry }}
+      description={errorMessage || "잠시 후 다시 시도해주세요."}
       title="GitHub 작업을 불러오지 못했습니다"
     />
   );

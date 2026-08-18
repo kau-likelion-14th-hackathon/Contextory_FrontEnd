@@ -54,18 +54,9 @@
   min-width: 0;
 }
 
-.github-work__filters .search-input {
-  flex: 0 1 320px;
-  min-width: 220px;
-}
-
-.github-work__filters .ui-input {
-  height: 44px;
-}
-
 .github-work__repository-filter {
   height: 44px;
-  flex: 0 0 150px;
+  flex: 0 1 320px;
   align-items: center;
   background: var(--color-surface-muted);
   border: 1px solid var(--color-border);
@@ -75,7 +66,7 @@
   font-size: 11px;
   min-width: 0;
   padding: 0 12px;
-  width: 150px;
+  width: 320px;
 }
 
 .github-work__repository-filter-label {
@@ -142,7 +133,7 @@
   color: var(--color-text-secondary);
   display: grid;
   font-size: 9px;
-  grid-template-columns: 370px 110px 105px 170px 65px 110px 118px 94px;
+  grid-template-columns: 460px 130px 120px 218px 150px 112px;
   height: 48px;
 }
 
@@ -172,32 +163,18 @@
   font-size: 10px;
 }
 
-.github-work__pagination .pagination {
-  flex-wrap: nowrap;
+.github-work__pagination-controls {
+  align-items: center;
+  display: flex;
+  gap: 8px;
 }
 
-.github-work__pagination .pagination > .ui-button {
-  font-size: 0;
-  height: 32px;
-  min-height: 32px;
-  min-width: 32px;
-  padding: 0;
-}
-
-.github-work__pagination .pagination > .ui-button:first-child::before {
-  content: "‹";
-  font-size: 14px;
-}
-
-.github-work__pagination .pagination > .ui-button:last-child::before {
-  content: "›";
-  font-size: 14px;
-}
-
-.github-work__pagination .pagination__page {
+.github-work__pagination-controls > span {
+  color: var(--color-text-primary);
   font-size: 12px;
-  height: 32px;
+  font-weight: 700;
   min-width: 32px;
+  text-align: center;
 }
 
 .github-work__panel > .feedback-state {
@@ -232,59 +209,6 @@
 
 .github-work__panel .feedback-state__actions {
   justify-content: center;
-}
-
-.github-work__state-info {
-  border-radius: var(--radius-md);
-  display: grid;
-  gap: 6px;
-  max-width: 620px;
-  min-width: 0;
-  padding: 14px;
-  text-align: left;
-  width: min(620px, 100%);
-}
-
-.github-work__state-info strong,
-.github-work__state-info span {
-  overflow-wrap: anywhere;
-}
-
-.github-work__state-info strong {
-  font-size: 10px;
-}
-
-.github-work__state-info > span {
-  color: var(--color-text-secondary);
-  font-size: 10px;
-}
-
-.github-work__state-info--note,
-.github-work__state-info--progress {
-  background: var(--color-primary-soft);
-}
-
-.github-work__state-info--progress {
-  gap: 10px;
-  min-height: 104px;
-  padding: 16px;
-}
-
-.github-work__state-info--progress strong {
-  font-size: 11px;
-}
-
-.github-work__state-info--progress > span {
-  font-size: 9px;
-}
-
-.github-work__state-info--error {
-  background: var(--color-danger-soft);
-  min-height: 90px;
-}
-
-.github-work__state-info--error strong {
-  color: var(--color-danger);
 }
 
 @media (min-width: 1200px) {
@@ -337,9 +261,6 @@
     min-height: 520px;
   }
 
-  .github-work__state-info {
-    width: min(100%, 620px);
-  }
 }
 
 @media (max-width: 767px) {
@@ -370,7 +291,6 @@
     width: 100%;
   }
 
-  .github-work__filters .search-input,
   .github-work__repository-filter,
   .github-work__filter-chips {
     grid-column: 1 / -1;
@@ -390,21 +310,15 @@
     flex-direction: column;
   }
 
-  .github-work__pagination .pagination {
+  .github-work__pagination-controls {
     justify-content: space-between;
     width: 100%;
   }
 
-  .github-work__pagination .pagination > .ui-button,
-  .github-work__pagination .pagination__page {
+  .github-work__pagination-controls .ui-button {
     height: 44px;
     min-height: 44px;
     min-width: 44px;
-  }
-
-  .github-work__pagination .pagination__pages {
-    order: initial;
-    width: auto;
   }
 
   .github-work__panel > .feedback-state {
@@ -417,7 +331,4 @@
     width: 100%;
   }
 
-  .github-work__state-info {
-    padding: 12px;
-  }
 }
