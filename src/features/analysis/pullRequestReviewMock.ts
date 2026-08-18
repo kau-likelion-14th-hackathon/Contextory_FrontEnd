@@ -2,18 +2,6 @@ import type { BadgeVariant } from "../../shared/ui";
 
 export type PullRequestReviewState = "review" | "analyzing" | "failed" | "approved";
 
-export type PullRequestReviewFile = {
-  path: string;
-  additions: number;
-  deletions: number;
-};
-
-export type PullRequestDiffLine = {
-  lineNumber: number;
-  marker: " " | "+" | "-";
-  content: string;
-};
-
 export type ReviewImpact = {
   role: string;
   description: string;
@@ -27,25 +15,6 @@ export type ReviewFollowUp = {
 };
 
 export type PullRequestReviewMock = {
-  pullRequest: {
-    number: number;
-    title: string;
-    author: string;
-    createdAt: string;
-    githubStatus: string;
-    headBranch: string;
-    baseBranch: string;
-    description: string;
-    commitCount: number;
-    relatedIssueCount: number;
-    relatedIssue: string;
-    githubUrl: string;
-  };
-  files: PullRequestReviewFile[];
-  diff: {
-    path: string;
-    lines: PullRequestDiffLine[];
-  };
   draft: {
     version: string;
     recordType: string;
@@ -70,7 +39,7 @@ export type PullRequestReviewMock = {
   };
 };
 
-// API 연결 전 화면 검증용 GitHub 원본 링크입니다.
+// 프로젝트 메모리 상세의 GitHub 근거 mock에서 재사용합니다.
 export const MOCK_GITHUB_PULL_URL = "https://github.com/team/contextory-web/pull/128";
 
 export const pullRequestReviewStates: PullRequestReviewState[] = [
@@ -81,41 +50,6 @@ export const pullRequestReviewStates: PullRequestReviewState[] = [
 ];
 
 export const pullRequestReviewMock: PullRequestReviewMock = {
-  pullRequest: {
-    number: 128,
-    title: "로그인 API 오류 응답 구조 변경",
-    author: "김백엔드",
-    createdAt: "7월 28일",
-    githubStatus: "Merged",
-    headBranch: "main",
-    baseBranch: "develop",
-    description: "로그인 API의 오류 응답 구조를 message에서 errorCode 기반으로 변경합니다.",
-    commitCount: 3,
-    relatedIssueCount: 1,
-    relatedIssue: "#82",
-    githubUrl: MOCK_GITHUB_PULL_URL,
-  },
-  files: [
-    { path: "auth/controller.ts", additions: 28, deletions: 12 },
-    { path: "error-response.dto.ts", additions: 34, deletions: 8 },
-    { path: "error-code.enum.ts", additions: 16, deletions: 0 },
-    { path: "auth/service.ts", additions: 8, deletions: 4 },
-    { path: "auth/auth.module.ts", additions: 6, deletions: 0 },
-    { path: "common/http-error.ts", additions: 18, deletions: 7 },
-    { path: "auth/service.spec.ts", additions: 42, deletions: 5 },
-    { path: "docs/auth-api.md", additions: 20, deletions: 2 },
-  ],
-  diff: {
-    path: "auth/controller.ts",
-    lines: [
-      { lineNumber: 45, marker: " ", content: "try {" },
-      { lineNumber: 46, marker: " ", content: "  const user = await this.authService.login(req.body);" },
-      { lineNumber: 47, marker: " ", content: "  return res.status(HttpStatus.OK).json({ success: true });" },
-      { lineNumber: 48, marker: "-", content: "  message: error.message" },
-      { lineNumber: 49, marker: "+", content: "  errorCode: code.code," },
-      { lineNumber: 50, marker: "+", content: "  message: code.message" },
-    ],
-  },
   draft: {
     version: "v1.0",
     recordType: "변경",

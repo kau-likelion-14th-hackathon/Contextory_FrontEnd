@@ -14,10 +14,6 @@ export type PullRequestRowProps = {
   githubStatusVariant?: BadgeVariant;
   headBranch?: string;
   baseBranch?: string;
-  additions?: number;
-  deletions?: number;
-  analysisStatus?: string;
-  analysisStatusVariant?: BadgeVariant;
   actionLabel?: string;
   actionTo?: string;
 };
@@ -34,15 +30,11 @@ export function PullRequestRow({
   githubStatusVariant = "neutral",
   headBranch,
   baseBranch,
-  additions,
-  deletions,
-  analysisStatus,
-  analysisStatusVariant = "info",
   actionLabel = "열기",
   actionTo,
 }: PullRequestRowProps) {
   const isDetailed = Boolean(
-    githubStatus || headBranch || baseBranch || analysisStatus || actionTo,
+    githubStatus || headBranch || baseBranch || actionTo,
   );
 
   if (isDetailed) {
@@ -59,15 +51,7 @@ export function PullRequestRow({
           <span>{headBranch ?? "-"}</span>
           {baseBranch ? <small>→ {baseBranch}</small> : null}
         </div>
-        <div className="pull-request-row__detail" data-label="파일">
-          {filesChanged ?? 0}
-        </div>
-        <div className="pull-request-row__changes" data-label="변경 통계">
-          <span>+{additions ?? 0}</span> <small>-{deletions ?? 0}</small>
-        </div>
-        <div className="pull-request-row__detail" data-label="AI 상태">
-          <Badge variant={analysisStatusVariant}>{analysisStatus ?? status}</Badge>
-        </div>
+        <div className="pull-request-row__detail" data-label="업데이트">{updatedAt}</div>
         <div className="pull-request-row__action">
           {action ?? (actionTo ? (
             <Link
