@@ -13,6 +13,12 @@ export type ModalProps = {
   closeOnEscape?: boolean;
 };
 
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+const INITIAL_FOCUS_SELECTOR =
+  'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function Modal({
   open,
   title,
@@ -24,8 +30,18 @@ export function Modal({
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const closeOnEscapeRef = useRef(closeOnEscape);
   const titleId = useId();
   const descriptionId = useId();
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    closeOnEscapeRef.current = closeOnEscape;
+  }, [closeOnEscape]);
 
   useEffect(() => {
     if (!open) {
@@ -37,8 +53,8 @@ export function Modal({
     document.body.style.overflow = "hidden";
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && closeOnEscape) {
-        onClose?.();
+      if (event.key === "Escape" && closeOnEscapeRef.current) {
+        onCloseRef.current?.();
         return;
       }
 
@@ -46,9 +62,7 @@ export function Modal({
         return;
       }
 
-      const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      );
+      const focusable = dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
 
       if (!focusable.length) {
         event.preventDefault();
@@ -68,9 +82,7 @@ export function Modal({
       }
     }
 
-    const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(
-      'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    );
+    const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(INITIAL_FOCUS_SELECTOR);
     firstFocusable?.focus();
     if (!firstFocusable) {
       dialogRef.current?.focus();
@@ -82,7 +94,7 @@ export function Modal({
       document.removeEventListener("keydown", handleKeyDown);
       previousFocusRef.current?.focus();
     };
-  }, [closeOnEscape, onClose, open]);
+  }, [open]);
 
   if (!open) {
     return null;
@@ -93,7 +105,7 @@ export function Modal({
       className="modal-backdrop"
       onMouseDown={(event) => {
         if (closeOnBackdrop && event.target === event.currentTarget) {
-          onClose?.();
+          onCloseRef.current?.();
         }
       }}
     >
@@ -112,7 +124,12 @@ export function Modal({
             {description ? <p id={descriptionId}>{description}</p> : null}
           </div>
           {onClose ? (
-            <Button aria-label="Close modal" onClick={onClose} size="sm" variant="ghost">
+            <Button
+              aria-label="Close modal"
+              onClick={() => onCloseRef.current?.()}
+              size="sm"
+              variant="ghost"
+            >
               ×
             </Button>
           ) : null}
