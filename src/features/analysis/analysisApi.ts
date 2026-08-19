@@ -125,6 +125,7 @@ export type AnalysisResult = {
   confidence?: number;
   retrievalQualityWarning?: boolean;
   hasExtendedFields: boolean;
+  hasRisksField: boolean;
   riskScore?: number;
   reviews: AnalysisResultReview[];
 };
@@ -255,6 +256,7 @@ export function parseAnalysisResult(value: unknown): AnalysisResult | null {
     "retrievalQualityWarning",
   ] as const;
   const hasExtendedFields = extendedFieldKeys.some((key) => key in record);
+  const hasRisksField = "risks" in record;
 
   const hasContent = Boolean(
     summary
@@ -296,6 +298,7 @@ export function parseAnalysisResult(value: unknown): AnalysisResult | null {
     evidence,
     reviews,
     hasExtendedFields,
+    hasRisksField,
   };
 
   if (riskScore !== undefined) result.riskScore = riskScore;

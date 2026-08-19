@@ -215,6 +215,7 @@ describe("Analysis API", () => {
       evidence: [],
       reviews: [],
       hasExtendedFields: false,
+      hasRisksField: true,
     });
   });
 
@@ -247,6 +248,7 @@ describe("Analysis API", () => {
     });
 
     expect(result?.hasExtendedFields).toBe(true);
+    expect(result?.hasRisksField).toBe(false);
   });
 
   it("distinguishes legacy results from extended empty sections", async () => {
@@ -266,7 +268,9 @@ describe("Analysis API", () => {
     });
 
     expect(legacy?.hasExtendedFields).toBe(false);
+    expect(legacy?.hasRisksField).toBe(true);
     expect(extended?.hasExtendedFields).toBe(true);
+    expect(extended?.hasRisksField).toBe(false);
   });
 
   it("parses async AnalysisResultPayload callback contract", async () => {
@@ -354,6 +358,7 @@ describe("Analysis API", () => {
       recommendations: [],
       reviews: [],
       hasExtendedFields: true,
+      hasRisksField: false,
     });
   });
 
@@ -383,6 +388,7 @@ describe("Analysis API", () => {
       reviews: [],
       confidence: 92,
       hasExtendedFields: true,
+      hasRisksField: false,
     });
   });
 
@@ -420,6 +426,7 @@ describe("Analysis API", () => {
       }],
       riskScore: 0.35,
       hasExtendedFields: false,
+      hasRisksField: false,
     });
   });
 
@@ -481,6 +488,7 @@ describe("Analysis API", () => {
       }],
       reviews: [],
       hasExtendedFields: true,
+      hasRisksField: false,
     });
   });
 
@@ -543,6 +551,7 @@ describe("Analysis API", () => {
         comment: "ok",
       }],
       hasExtendedFields: true,
+      hasRisksField: false,
     });
   });
 

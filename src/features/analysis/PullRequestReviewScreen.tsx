@@ -1226,6 +1226,50 @@ function AnalysisResultPanel({
     (item) => !isContextEvidenceWithoutUserFacingInfo(item),
   );
 
+  const changesSection = (
+    <section
+      aria-labelledby="analysis-changes-title"
+      className="pull-request-review__analysis-changes"
+    >
+      <div className="pull-request-review__analysis-section-heading">
+        <h3 id="analysis-changes-title">변경 파일</h3>
+        {analysisResult.changes.length > 0 ? (
+          <span className="pull-request-review__analysis-count">
+            {analysisResult.changes.length}개
+          </span>
+        ) : null}
+      </div>
+
+      {analysisResult.changes.length > 0 ? (
+        <>
+          <ul className="pull-request-review__analysis-change-list">
+            {visibleChanges.map((change) => (
+              <li key={`${change.filePath}-${change.description}`}>
+                <code>{change.filePath}</code>
+                <span>{change.description}</span>
+              </li>
+            ))}
+          </ul>
+          {hiddenChangeCount > 0 ? (
+            <div className="pull-request-review__analysis-change-controls">
+              {!showAllChanges ? (
+                <Button onClick={() => setShowAllChanges(true)} size="sm" variant="secondary">
+                  전체 변경 파일 {analysisResult.changes.length}개 보기
+                </Button>
+              ) : (
+                <Button onClick={() => setShowAllChanges(false)} size="sm" variant="ghost">
+                  접기
+                </Button>
+              )}
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <p className="pull-request-review__analysis-empty">변경 파일 정보가 없습니다.</p>
+      )}
+    </section>
+  );
+
   return (
     <section
       aria-labelledby="analysis-result-title"
@@ -1244,229 +1288,218 @@ function AnalysisResultPanel({
       </header>
 
       {isLegacyResult ? (
-        <p className="pull-request-review__legacy-notice" role="status">
-          이 분석은 이전 형식으로 생성된 결과입니다. 상세 분석 항목은 제공되지 않습니다.
-        </p>
-      ) : null}
-
-      {!isLegacyResult && analysisResult.retrievalQualityWarning ? (
-        <p className="pull-request-review__retrieval-warning" role="status">
-          검색된 프로젝트 근거의 품질 확인이 필요합니다.
-        </p>
-      ) : null}
-
-      <AnalysisTextSection
-        id="analysis-summary-title"
-        text={analysisResult.summary}
-        title="작업 요약"
-      />
-
-      {!isLegacyResult && analysisResult.purpose ? (
-        <AnalysisTextSection
-          id="analysis-purpose-title"
-          text={analysisResult.purpose}
-          title="작업 목적"
-        />
-      ) : null}
-
-      {!isLegacyResult && analysisResult.changeReason ? (
-        <AnalysisTextSection
-          id="analysis-change-reason-title"
-          text={analysisResult.changeReason}
-          title="변경 이유"
-        />
-      ) : null}
-
-      {!isLegacyResult && (analysisResult.before || analysisResult.after) ? (
-        <section aria-labelledby="analysis-diff-title" className="pull-request-review__analysis-diff">
-          <h3 id="analysis-diff-title">변경 전 / 변경 후</h3>
-          <div className="pull-request-review__analysis-diff-grid">
-            <article>
-              <h4>변경 전</h4>
-              <p>{analysisResult.before || "정보가 없습니다."}</p>
-            </article>
-            <article>
-              <h4>변경 후</h4>
-              <p>{analysisResult.after || "정보가 없습니다."}</p>
-            </article>
-          </div>
-        </section>
-      ) : null}
-
-      {!isLegacyResult ? (
-        <AnalysisTagSection
-          emptyText="관련 기능 정보가 없습니다."
-          id="analysis-related-features-title"
-          items={analysisResult.relatedFeatures}
-          title="관련 기능"
-        />
-      ) : null}
-
-      {!isLegacyResult ? (
-        <AnalysisTagSection
-          emptyText="영향 역할 정보가 없습니다."
-          id="analysis-affected-roles-title"
-          items={analysisResult.affectedRoles}
-          title="영향 역할"
-        />
-      ) : null}
-
-      {!isLegacyResult && analysisResult.roleImpacts.length > 0 ? (
-        <section
-          aria-labelledby="analysis-role-impacts-title"
-          className="pull-request-review__analysis-role-impacts"
-        >
-          <h3 id="analysis-role-impacts-title">역할별 영향</h3>
-          <ul className="pull-request-review__role-impact-list">
-            {analysisResult.roleImpacts.map((item, index) => (
-              <li key={`${item.role}-${index}`}>
-                <div className="pull-request-review__role-impact-header">
-                  <strong>{item.role || "역할 미지정"}</strong>
-                  <span>{item.impact}</span>
-                </div>
-                {item.basis ? (
-                  <p className="pull-request-review__role-impact-basis">근거 · {item.basis}</p>
-                ) : null}
-                <EvidenceRefsList evidenceMap={evidenceMap} refs={item.evidenceRefs} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {isLegacyResult ? (
-        <section aria-label="분석 인사이트" className="pull-request-review__analysis-insights">
-          <AnalysisInsightCard
-            count={analysisResult.impacts.length}
-            emptyText="영향 정보가 없습니다."
-            items={analysisResult.impacts}
-            title="영향"
-            variant="impact"
-          />
-          <AnalysisInsightCard
-            count={analysisResult.risks.length}
-            emptyText="식별된 리스크가 없습니다."
-            items={analysisResult.risks}
-            title="리스크"
-            variant="risk"
-          />
-          <AnalysisInsightCard
-            count={analysisResult.recommendations.length}
-            emptyText="권장 사항이 없습니다."
-            items={analysisResult.recommendations}
-            title="권장 사항"
-            variant="recommendation"
-          />
-        </section>
-      ) : null}
-
-      {!isLegacyResult ? (
-        <section
-          aria-labelledby="analysis-confirmation-title"
-          className="pull-request-review__analysis-confirmation"
-        >
-          <h3 id="analysis-confirmation-title">확인 필요 사항</h3>
-          {analysisResult.needsConfirmation.length > 0 ? (
-            <ul className="pull-request-review__insight-list">
-              {analysisResult.needsConfirmation.map((item) => <li key={item}>{item}</li>)}
-            </ul>
-          ) : (
-            <p className="pull-request-review__analysis-empty">확인이 필요한 사항이 없습니다.</p>
-          )}
-        </section>
-      ) : null}
-
-      <section
-        aria-labelledby="analysis-changes-title"
-        className="pull-request-review__analysis-changes"
-      >
-        <div className="pull-request-review__analysis-section-heading">
-          <h3 id="analysis-changes-title">변경 파일</h3>
-          {analysisResult.changes.length > 0 ? (
-            <span className="pull-request-review__analysis-count">
-              {analysisResult.changes.length}개
-            </span>
-          ) : null}
-        </div>
-
-        {analysisResult.changes.length > 0 ? (
-          <>
-            <ul className="pull-request-review__analysis-change-list">
-              {visibleChanges.map((change) => (
-                <li key={`${change.filePath}-${change.description}`}>
-                  <code>{change.filePath}</code>
-                  <span>{change.description}</span>
-                </li>
-              ))}
-            </ul>
-            {hiddenChangeCount > 0 ? (
-              <div className="pull-request-review__analysis-change-controls">
-                {!showAllChanges ? (
-                  <Button onClick={() => setShowAllChanges(true)} size="sm" variant="secondary">
-                    전체 변경 파일 {analysisResult.changes.length}개 보기
-                  </Button>
-                ) : (
-                  <Button onClick={() => setShowAllChanges(false)} size="sm" variant="ghost">
-                    접기
-                  </Button>
-                )}
-              </div>
-            ) : null}
-          </>
-        ) : (
-          <p className="pull-request-review__analysis-empty">변경 파일 정보가 없습니다.</p>
-        )}
-      </section>
-
-      {!isLegacyResult && followUpTasks.length > 0 ? (
-        <section
-          aria-labelledby="analysis-follow-ups-title"
-          className="pull-request-review__analysis-follow-ups"
-        >
-          <h3 id="analysis-follow-ups-title">후속 작업</h3>
-          <p className="pull-request-review__analysis-follow-ups-note">
-            프로젝트 기록 승인 전 로컬 체크리스트입니다.
+        <>
+          <p className="pull-request-review__legacy-notice" role="status">
+            이 분석은 이전 형식으로 생성된 결과입니다. 상세 분석 항목은 제공되지 않습니다.
           </p>
-          <div className="pull-request-review__follow-ups">
-            {followUpTasks.map((item) => (
-              <div className="pull-request-review__follow-up-item" key={item.id}>
-                <button
-                  aria-label={`${item.task} ${item.completed ? "완료 해제" : "완료 처리"}`}
-                  aria-pressed={item.completed}
-                  onClick={() => onToggleFollowUpTask(item.id)}
-                  type="button"
-                >
-                  <span aria-hidden="true">{item.completed ? "☑" : "☐"}</span>
-                  {item.role ? <span className="pull-request-review__follow-up-role">{item.role}</span> : null}
-                  {item.task}
-                </button>
-                <EvidenceRefsList evidenceMap={evidenceMap} refs={item.evidenceRefs} />
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
 
-      {!isLegacyResult && visibleEvidence.length > 0 ? (
-        <section
-          aria-labelledby="analysis-evidence-title"
-          className="pull-request-review__analysis-evidence"
-        >
-          <h3 id="analysis-evidence-title">분석 근거</h3>
-          <ul className="pull-request-review__evidence-list">
-            {visibleEvidence.map((item) => (
-              <li key={item.id || `${item.source}-${item.location}`}>
-                <div className="pull-request-review__evidence-item-header">
-                  <strong>{item.source}</strong>
-                  {item.id ? <code>{item.id}</code> : null}
+          <AnalysisTextSection
+            id="analysis-summary-title"
+            text={analysisResult.summary}
+            title="작업 요약"
+          />
+
+          <section aria-label="분석 인사이트" className="pull-request-review__analysis-insights">
+            <AnalysisInsightCard
+              count={analysisResult.impacts.length}
+              emptyText="영향 정보가 없습니다."
+              items={analysisResult.impacts}
+              title="영향"
+              variant="impact"
+            />
+            <AnalysisInsightCard
+              count={analysisResult.risks.length}
+              emptyText="식별된 리스크가 없습니다."
+              items={analysisResult.risks}
+              title="리스크"
+              variant="risk"
+            />
+            <AnalysisInsightCard
+              count={analysisResult.recommendations.length}
+              emptyText="권장 사항이 없습니다."
+              items={analysisResult.recommendations}
+              title="권장 사항"
+              variant="recommendation"
+            />
+          </section>
+
+          {changesSection}
+        </>
+      ) : (
+        <>
+          {analysisResult.retrievalQualityWarning ? (
+            <p className="pull-request-review__retrieval-warning" role="status">
+              검색된 프로젝트 근거의 품질 확인이 필요합니다.
+            </p>
+          ) : null}
+
+          <AnalysisTextSection
+            emptyText="요약 정보가 없습니다."
+            id="analysis-summary-title"
+            text={analysisResult.summary}
+            title="작업 요약"
+          />
+
+          <AnalysisTextSection
+            emptyText="작업 목적 정보가 없습니다."
+            id="analysis-purpose-title"
+            text={analysisResult.purpose}
+            title="작업 목적"
+          />
+
+          <AnalysisTextSection
+            emptyText="변경 이유 정보가 없습니다."
+            id="analysis-change-reason-title"
+            text={analysisResult.changeReason}
+            title="변경 이유"
+          />
+
+          <section aria-labelledby="analysis-diff-title" className="pull-request-review__analysis-diff">
+            <h3 id="analysis-diff-title">변경 전 / 변경 후</h3>
+            <div className="pull-request-review__analysis-diff-grid">
+              <article>
+                <h4>변경 전</h4>
+                <p>{analysisResult.before || "정보가 없습니다."}</p>
+              </article>
+              <article>
+                <h4>변경 후</h4>
+                <p>{analysisResult.after || "정보가 없습니다."}</p>
+              </article>
+            </div>
+          </section>
+
+          <AnalysisTagSection
+            emptyText="관련 기능 정보가 없습니다."
+            id="analysis-related-features-title"
+            items={analysisResult.relatedFeatures}
+            title="관련 기능"
+          />
+
+          <AnalysisTagSection
+            emptyText="영향 역할 정보가 없습니다."
+            id="analysis-affected-roles-title"
+            items={analysisResult.affectedRoles}
+            title="영향 역할"
+          />
+
+          <section
+            aria-labelledby="analysis-role-impacts-title"
+            className="pull-request-review__analysis-role-impacts"
+          >
+            <h3 id="analysis-role-impacts-title">역할별 영향</h3>
+            {analysisResult.roleImpacts.length > 0 ? (
+              <ul className="pull-request-review__role-impact-list">
+                {analysisResult.roleImpacts.map((item, index) => (
+                  <li key={`${item.role}-${index}`}>
+                    <div className="pull-request-review__role-impact-header">
+                      <strong>{item.role || "역할 미지정"}</strong>
+                      <span>{item.impact}</span>
+                    </div>
+                    {item.basis ? (
+                      <p className="pull-request-review__role-impact-basis">근거 · {item.basis}</p>
+                    ) : null}
+                    <EvidenceRefsList evidenceMap={evidenceMap} refs={item.evidenceRefs} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="pull-request-review__analysis-empty">역할별 영향 정보가 없습니다.</p>
+            )}
+          </section>
+
+          <section
+            aria-labelledby="analysis-risks-title"
+            className="pull-request-review__analysis-confirmation"
+          >
+            <h3 id="analysis-risks-title">리스크</h3>
+            {analysisResult.risks.length > 0 ? (
+              <ul className="pull-request-review__insight-list">
+                {analysisResult.risks.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            ) : (
+              <p className="pull-request-review__analysis-empty">
+                {analysisResult.hasRisksField
+                  ? "식별된 리스크가 없습니다."
+                  : "리스크 상세가 분석 결과에 제공되지 않았습니다."}
+              </p>
+            )}
+          </section>
+
+          <section
+            aria-labelledby="analysis-confirmation-title"
+            className="pull-request-review__analysis-confirmation"
+          >
+            <h3 id="analysis-confirmation-title">확인 필요 사항</h3>
+            {analysisResult.needsConfirmation.length > 0 ? (
+              <ul className="pull-request-review__insight-list">
+                {analysisResult.needsConfirmation.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            ) : (
+              <p className="pull-request-review__analysis-empty">확인이 필요한 사항이 없습니다.</p>
+            )}
+          </section>
+
+          {changesSection}
+
+          <section
+            aria-labelledby="analysis-follow-ups-title"
+            className="pull-request-review__analysis-follow-ups"
+          >
+            <h3 id="analysis-follow-ups-title">후속 작업</h3>
+            {followUpTasks.length > 0 ? (
+              <>
+                <p className="pull-request-review__analysis-follow-ups-note">
+                  프로젝트 기록 승인 전 로컬 체크리스트입니다.
+                </p>
+                <div className="pull-request-review__follow-ups">
+                  {followUpTasks.map((item) => (
+                    <div className="pull-request-review__follow-up-item" key={item.id}>
+                      <button
+                        aria-label={`${item.task} ${item.completed ? "완료 해제" : "완료 처리"}`}
+                        aria-pressed={item.completed}
+                        onClick={() => onToggleFollowUpTask(item.id)}
+                        type="button"
+                      >
+                        <span aria-hidden="true">{item.completed ? "☑" : "☐"}</span>
+                        {item.role ? (
+                          <span className="pull-request-review__follow-up-role">{item.role}</span>
+                        ) : null}
+                        {item.task}
+                      </button>
+                      <EvidenceRefsList evidenceMap={evidenceMap} refs={item.evidenceRefs} />
+                    </div>
+                  ))}
                 </div>
-                <p>{item.location}</p>
-                {item.description ? <p>{item.description}</p> : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+              </>
+            ) : (
+              <p className="pull-request-review__analysis-empty">후속 작업이 없습니다.</p>
+            )}
+          </section>
+
+          <section
+            aria-labelledby="analysis-evidence-title"
+            className="pull-request-review__analysis-evidence"
+          >
+            <h3 id="analysis-evidence-title">분석 근거</h3>
+            {visibleEvidence.length > 0 ? (
+              <ul className="pull-request-review__evidence-list">
+                {visibleEvidence.map((item) => (
+                  <li key={item.id || `${item.source}-${item.location}`}>
+                    <div className="pull-request-review__evidence-item-header">
+                      <strong>{item.source}</strong>
+                      {item.id ? <code>{item.id}</code> : null}
+                    </div>
+                    <p>{item.location}</p>
+                    {item.description ? <p>{item.description}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="pull-request-review__analysis-empty">표시할 분석 근거가 없습니다.</p>
+            )}
+          </section>
+        </>
+      )}
     </section>
   );
 }
