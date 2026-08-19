@@ -122,6 +122,9 @@ export type AnalysisResult = {
   followUpTasks: AnalysisResultFollowUpTask[];
   needsConfirmation: string[];
   evidence: AnalysisResultEvidence[];
+  confidence?: number;
+  retrievalQualityWarning?: boolean;
+  hasExtendedFields: boolean;
   riskScore?: number;
   reviews: AnalysisResultReview[];
 };
@@ -233,6 +236,25 @@ export function parseAnalysisResult(value: unknown): AnalysisResult | null {
   const riskScore = typeof record.riskScore === "number" && Number.isFinite(record.riskScore)
     ? record.riskScore
     : undefined;
+  const confidence = typeof record.confidence === "number" && Number.isFinite(record.confidence)
+    ? record.confidence
+    : undefined;
+  const retrievalQualityWarning = record.retrievalQualityWarning === true;
+  const extendedFieldKeys = [
+    "purpose",
+    "changeReason",
+    "before",
+    "after",
+    "relatedFeatures",
+    "affectedRoles",
+    "roleImpacts",
+    "followUpTasks",
+    "needsConfirmation",
+    "evidence",
+    "confidence",
+    "retrievalQualityWarning",
+  ] as const;
+  const hasExtendedFields = extendedFieldKeys.some((key) => key in record);
 
   const hasContent = Boolean(
     summary
@@ -273,9 +295,12 @@ export function parseAnalysisResult(value: unknown): AnalysisResult | null {
     needsConfirmation,
     evidence,
     reviews,
+    hasExtendedFields,
   };
 
   if (riskScore !== undefined) result.riskScore = riskScore;
+  if (confidence !== undefined) result.confidence = confidence;
+  if (retrievalQualityWarning) result.retrievalQualityWarning = true;
 
   return result;
 }

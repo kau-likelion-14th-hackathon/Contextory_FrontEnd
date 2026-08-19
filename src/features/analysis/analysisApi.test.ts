@@ -214,10 +214,62 @@ describe("Analysis API", () => {
       needsConfirmation: [],
       evidence: [],
       reviews: [],
+      hasExtendedFields: false,
     });
   });
 
-  it("parses full latest analysisResult schema", async () => {
+  it("marks legacy five-field results without extended keys", async () => {
+    const { parseAnalysisResult } = await loadAnalysisApi();
+
+    const result = parseAnalysisResult({
+      summary: "legacy",
+      changes: [],
+      impacts: ["frontend"],
+      risks: [],
+      recommendations: [],
+    });
+
+    expect(result?.hasExtendedFields).toBe(false);
+  });
+
+  it("marks extended format when keys exist with empty values", async () => {
+    const { parseAnalysisResult } = await loadAnalysisApi();
+
+    const result = parseAnalysisResult({
+      summary: "extended empty",
+      relatedFeatures: [],
+      affectedRoles: [],
+      roleImpacts: [],
+      followUpTasks: [],
+      needsConfirmation: [],
+      evidence: [],
+      retrievalQualityWarning: false,
+    });
+
+    expect(result?.hasExtendedFields).toBe(true);
+  });
+
+  it("distinguishes legacy results from extended empty sections", async () => {
+    const { parseAnalysisResult } = await loadAnalysisApi();
+
+    const legacy = parseAnalysisResult({
+      summary: "legacy",
+      impacts: ["api"],
+      risks: [],
+      recommendations: [],
+      changes: [],
+    });
+    const extended = parseAnalysisResult({
+      summary: "extended",
+      relatedFeatures: [],
+      needsConfirmation: [],
+    });
+
+    expect(legacy?.hasExtendedFields).toBe(false);
+    expect(extended?.hasExtendedFields).toBe(true);
+  });
+
+  it("parses async AnalysisResultPayload callback contract", async () => {
     const { parseAnalysisResult } = await loadAnalysisApi();
 
     expect(parseAnalysisResult({
@@ -240,24 +292,24 @@ describe("Analysis API", () => {
         evidenceRefs: ["ev-2"],
       }],
       needsConfirmation: ["기존 message 필드 유지 여부"],
-      evidence: [{
-        id: "ev-1",
-        source: "github",
-        location: "src/api/client.ts",
-        description: "오류 파싱 로직",
-        chunkId: "chunk-1",
-        similarityScore: 0.92,
-      }],
-      riskScore: 0.35,
-      reviews: [{
-        filePath: "src/api/client.ts",
-        lineNumber: 42,
-        comment: "null 체크 추가 필요",
-      }],
-      changes: [{ filePath: "src/api/client.ts", description: "오류 파싱 수정" }],
-      impacts: ["frontend"],
-      risks: ["regression"],
-      recommendations: ["add tests"],
+      evidence: [
+        {
+          id: "ev-1",
+          source: "github",
+          location: "src/api/client.ts",
+          description: "오류 파싱 로직",
+          chunkId: "chunk-1",
+          similarityScore: 0.92,
+        },
+        {
+          id: "ev-2",
+          source: "memory",
+          location: "docs/testing.md",
+          description: "회귀 테스트 가이드",
+        },
+      ],
+      confidence: 0.87,
+      retrievalQualityWarning: true,
     })).toEqual({
       summary: "API 오류 응답 정리",
       purpose: "클라이언트 오류 처리 일관성 확보",
@@ -278,24 +330,96 @@ describe("Analysis API", () => {
         evidenceRefs: ["ev-2"],
       }],
       needsConfirmation: ["기존 message 필드 유지 여부"],
-      evidence: [{
-        id: "ev-1",
-        source: "github",
-        location: "src/api/client.ts",
-        description: "오류 파싱 로직",
-        chunkId: "chunk-1",
-        similarityScore: 0.92,
-      }],
+      evidence: [
+        {
+          id: "ev-1",
+          source: "github",
+          location: "src/api/client.ts",
+          description: "오류 파싱 로직",
+          chunkId: "chunk-1",
+          similarityScore: 0.92,
+        },
+        {
+          id: "ev-2",
+          source: "memory",
+          location: "docs/testing.md",
+          description: "회귀 테스트 가이드",
+        },
+      ],
+      confidence: 0.87,
+      retrievalQualityWarning: true,
+      changes: [],
+      impacts: [],
+      risks: [],
+      recommendations: [],
+      reviews: [],
+      hasExtendedFields: true,
+    });
+  });
+
+  it("parses confidence and ignores invalid retrievalQualityWarning values", async () => {
+    const { parseAnalysisResult } = await loadAnalysisApi();
+
+    expect(parseAnalysisResult({
+      summary: "신뢰도만 있는 결과",
+      confidence: 92,
+      retrievalQualityWarning: false,
+    })).toEqual({
+      summary: "신뢰도만 있는 결과",
+      changes: [],
+      impacts: [],
+      risks: [],
+      recommendations: [],
+      purpose: "",
+      changeReason: "",
+      before: "",
+      after: "",
+      relatedFeatures: [],
+      affectedRoles: [],
+      roleImpacts: [],
+      followUpTasks: [],
+      needsConfirmation: [],
+      evidence: [],
+      reviews: [],
+      confidence: 92,
+      hasExtendedFields: true,
+    });
+  });
+
+  it("parses legacy extra fields riskScore and reviews for backward compatibility", async () => {
+    const { parseAnalysisResult } = await loadAnalysisApi();
+
+    expect(parseAnalysisResult({
+      summary: "레거시 extra 필드",
       riskScore: 0.35,
       reviews: [{
         filePath: "src/api/client.ts",
         lineNumber: 42,
         comment: "null 체크 추가 필요",
       }],
-      changes: [{ filePath: "src/api/client.ts", description: "오류 파싱 수정" }],
-      impacts: ["frontend"],
-      risks: ["regression"],
-      recommendations: ["add tests"],
+    })).toEqual({
+      summary: "레거시 extra 필드",
+      changes: [],
+      impacts: [],
+      risks: [],
+      recommendations: [],
+      purpose: "",
+      changeReason: "",
+      before: "",
+      after: "",
+      relatedFeatures: [],
+      affectedRoles: [],
+      roleImpacts: [],
+      followUpTasks: [],
+      needsConfirmation: [],
+      evidence: [],
+      reviews: [{
+        filePath: "src/api/client.ts",
+        lineNumber: 42,
+        comment: "null 체크 추가 필요",
+      }],
+      riskScore: 0.35,
+      hasExtendedFields: false,
     });
   });
 
@@ -322,11 +446,6 @@ describe("Analysis API", () => {
         description: null,
         chunkId: null,
         similarityScore: null,
-      }],
-      reviews: [{
-        filePath: null,
-        lineNumber: null,
-        comment: "검토 의견",
       }],
     })).toEqual({
       summary: "요약만 있는 결과",
@@ -360,11 +479,8 @@ describe("Analysis API", () => {
         chunkId: null,
         similarityScore: null,
       }],
-      reviews: [{
-        filePath: null,
-        lineNumber: null,
-        comment: "검토 의견",
-      }],
+      reviews: [],
+      hasExtendedFields: true,
     });
   });
 
@@ -426,6 +542,7 @@ describe("Analysis API", () => {
         lineNumber: 10,
         comment: "ok",
       }],
+      hasExtendedFields: true,
     });
   });
 

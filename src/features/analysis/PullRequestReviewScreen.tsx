@@ -1100,6 +1100,10 @@ function buildEvidenceMap(evidence: AnalysisResultEvidence[]) {
   return new Map(evidence.filter((item) => item.id).map((item) => [item.id, item]));
 }
 
+function isContextEvidenceWithoutUserFacingInfo(item: AnalysisResultEvidence) {
+  return item.source === "context" && !item.description?.trim();
+}
+
 function EvidenceRefsList({
   evidenceMap,
   refs,
@@ -1109,27 +1113,37 @@ function EvidenceRefsList({
 }) {
   if (refs.length === 0) return null;
 
-  const resolved = refs
-    .map((ref) => evidenceMap.get(ref))
-    .filter((item): item is AnalysisResultEvidence => item !== undefined);
-
-  if (resolved.length === 0) {
-    return (
-      <ul className="pull-request-review__evidence-refs">
-        {refs.map((ref) => <li key={ref}><code>{ref}</code></li>)}
-      </ul>
-    );
-  }
-
   return (
     <ul className="pull-request-review__evidence-refs">
-      {resolved.map((item) => (
-        <li key={item.id}>
-          <strong>{item.source}</strong>
-          <span>{item.location}</span>
-          {item.description ? <span>{item.description}</span> : null}
-        </li>
-      ))}
+      {refs.map((ref) => {
+        const evidence = evidenceMap.get(ref);
+
+        if (evidence) {
+          if (isContextEvidenceWithoutUserFacingInfo(evidence)) {
+            return (
+              <li key={ref}>
+                <strong>{evidence.source}</strong>
+                <span>프로젝트 컨텍스트</span>
+              </li>
+            );
+          }
+
+          return (
+            <li key={ref}>
+              <strong>{evidence.source}</strong>
+              <span>{evidence.location}</span>
+              {evidence.description ? <span>{evidence.description}</span> : null}
+            </li>
+          );
+        }
+
+        return (
+          <li key={ref}>
+            <code>{ref}</code>
+            <span>연결된 근거를 찾을 수 없습니다.</span>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -1207,9 +1221,10 @@ function AnalysisResultPanel({
   const visibleChanges = showAllChanges || hiddenChangeCount === 0
     ? analysisResult.changes
     : analysisResult.changes.slice(0, DEFAULT_VISIBLE_ANALYSIS_CHANGES);
-  const hasLegacyInsights = analysisResult.impacts.length > 0
-    || analysisResult.risks.length > 0
-    || analysisResult.recommendations.length > 0;
+  const isLegacyResult = !analysisResult.hasExtendedFields;
+  const visibleEvidence = analysisResult.evidence.filter(
+    (item) => !isContextEvidenceWithoutUserFacingInfo(item),
+  );
 
   return (
     <section
@@ -1228,13 +1243,25 @@ function AnalysisResultPanel({
         </div>
       </header>
 
+      {isLegacyResult ? (
+        <p className="pull-request-review__legacy-notice" role="status">
+          이 분석은 이전 형식으로 생성된 결과입니다. 상세 분석 항목은 제공되지 않습니다.
+        </p>
+      ) : null}
+
+      {!isLegacyResult && analysisResult.retrievalQualityWarning ? (
+        <p className="pull-request-review__retrieval-warning" role="status">
+          검색된 프로젝트 근거의 품질 확인이 필요합니다.
+        </p>
+      ) : null}
+
       <AnalysisTextSection
         id="analysis-summary-title"
         text={analysisResult.summary}
         title="작업 요약"
       />
 
-      {analysisResult.purpose ? (
+      {!isLegacyResult && analysisResult.purpose ? (
         <AnalysisTextSection
           id="analysis-purpose-title"
           text={analysisResult.purpose}
@@ -1242,7 +1269,7 @@ function AnalysisResultPanel({
         />
       ) : null}
 
-      {analysisResult.changeReason ? (
+      {!isLegacyResult && analysisResult.changeReason ? (
         <AnalysisTextSection
           id="analysis-change-reason-title"
           text={analysisResult.changeReason}
@@ -1250,7 +1277,7 @@ function AnalysisResultPanel({
         />
       ) : null}
 
-      {analysisResult.before || analysisResult.after ? (
+      {!isLegacyResult && (analysisResult.before || analysisResult.after) ? (
         <section aria-labelledby="analysis-diff-title" className="pull-request-review__analysis-diff">
           <h3 id="analysis-diff-title">변경 전 / 변경 후</h3>
           <div className="pull-request-review__analysis-diff-grid">
@@ -1266,21 +1293,25 @@ function AnalysisResultPanel({
         </section>
       ) : null}
 
-      <AnalysisTagSection
-        emptyText="관련 기능 정보가 없습니다."
-        id="analysis-related-features-title"
-        items={analysisResult.relatedFeatures}
-        title="관련 기능"
-      />
+      {!isLegacyResult ? (
+        <AnalysisTagSection
+          emptyText="관련 기능 정보가 없습니다."
+          id="analysis-related-features-title"
+          items={analysisResult.relatedFeatures}
+          title="관련 기능"
+        />
+      ) : null}
 
-      <AnalysisTagSection
-        emptyText="영향 역할 정보가 없습니다."
-        id="analysis-affected-roles-title"
-        items={analysisResult.affectedRoles}
-        title="영향 역할"
-      />
+      {!isLegacyResult ? (
+        <AnalysisTagSection
+          emptyText="영향 역할 정보가 없습니다."
+          id="analysis-affected-roles-title"
+          items={analysisResult.affectedRoles}
+          title="영향 역할"
+        />
+      ) : null}
 
-      {analysisResult.roleImpacts.length > 0 ? (
+      {!isLegacyResult && analysisResult.roleImpacts.length > 0 ? (
         <section
           aria-labelledby="analysis-role-impacts-title"
           className="pull-request-review__analysis-role-impacts"
@@ -1303,7 +1334,7 @@ function AnalysisResultPanel({
         </section>
       ) : null}
 
-      {hasLegacyInsights ? (
+      {isLegacyResult ? (
         <section aria-label="분석 인사이트" className="pull-request-review__analysis-insights">
           <AnalysisInsightCard
             count={analysisResult.impacts.length}
@@ -1329,19 +1360,21 @@ function AnalysisResultPanel({
         </section>
       ) : null}
 
-      <section
-        aria-labelledby="analysis-confirmation-title"
-        className="pull-request-review__analysis-confirmation"
-      >
-        <h3 id="analysis-confirmation-title">확인 필요 사항</h3>
-        {analysisResult.needsConfirmation.length > 0 ? (
-          <ul className="pull-request-review__insight-list">
-            {analysisResult.needsConfirmation.map((item) => <li key={item}>{item}</li>)}
-          </ul>
-        ) : (
-          <p className="pull-request-review__analysis-empty">확인이 필요한 사항이 없습니다.</p>
-        )}
-      </section>
+      {!isLegacyResult ? (
+        <section
+          aria-labelledby="analysis-confirmation-title"
+          className="pull-request-review__analysis-confirmation"
+        >
+          <h3 id="analysis-confirmation-title">확인 필요 사항</h3>
+          {analysisResult.needsConfirmation.length > 0 ? (
+            <ul className="pull-request-review__insight-list">
+              {analysisResult.needsConfirmation.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+          ) : (
+            <p className="pull-request-review__analysis-empty">확인이 필요한 사항이 없습니다.</p>
+          )}
+        </section>
+      ) : null}
 
       <section
         aria-labelledby="analysis-changes-title"
@@ -1385,7 +1418,7 @@ function AnalysisResultPanel({
         )}
       </section>
 
-      {followUpTasks.length > 0 ? (
+      {!isLegacyResult && followUpTasks.length > 0 ? (
         <section
           aria-labelledby="analysis-follow-ups-title"
           className="pull-request-review__analysis-follow-ups"
@@ -1414,14 +1447,14 @@ function AnalysisResultPanel({
         </section>
       ) : null}
 
-      {analysisResult.evidence.length > 0 ? (
+      {!isLegacyResult && visibleEvidence.length > 0 ? (
         <section
           aria-labelledby="analysis-evidence-title"
           className="pull-request-review__analysis-evidence"
         >
           <h3 id="analysis-evidence-title">분석 근거</h3>
           <ul className="pull-request-review__evidence-list">
-            {analysisResult.evidence.map((item) => (
+            {visibleEvidence.map((item) => (
               <li key={item.id || `${item.source}-${item.location}`}>
                 <div className="pull-request-review__evidence-item-header">
                   <strong>{item.source}</strong>
@@ -1429,11 +1462,6 @@ function AnalysisResultPanel({
                 </div>
                 <p>{item.location}</p>
                 {item.description ? <p>{item.description}</p> : null}
-                {item.similarityScore !== undefined && item.similarityScore !== null ? (
-                  <span className="pull-request-review__evidence-score">
-                    유사도 {item.similarityScore}
-                  </span>
-                ) : null}
               </li>
             ))}
           </ul>
