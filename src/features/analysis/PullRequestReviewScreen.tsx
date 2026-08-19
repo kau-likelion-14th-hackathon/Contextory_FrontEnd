@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../shared/api/client";
 import { PageContainer } from "../../shared/layouts";
 import { Badge, Button, EmptyState, ErrorState, LoadingState } from "../../shared/ui";
@@ -7,11 +7,16 @@ import {
   approveAnalysis,
   cancelAnalysis,
   canApproveAnalysisRecord,
+  canRegisterAnalysisMemory,
+  canManageAnalysisMemory,
   getAnalysis,
   getAnalysisApiErrorCode,
+  getAnalysisFeedbackMessage,
   getLatestAnalysisByPrNumber,
   isActiveAnalysisStatus,
+  mapAnalysisRecordResponse,
   parseAnalysisResult,
+  registerAnalysisMemory,
   requestAnalysis,
   retryAnalysis,
   serializeAnalysisResultForApi,
@@ -42,6 +47,7 @@ import {
   withDraftStringList,
 } from "./analysisEditDraft";
 import { PullRequestBodyMarkdown } from "./PullRequestBodyMarkdown";
+import type { ProjectWorkspaceContextValue } from "../workspace/WorkspaceShell";
 import "./PullRequestReviewScreen.css";
 
 const POLLING_INTERVAL_MS = 2000;
@@ -71,11 +77,13 @@ type AnalysisLoadState = "loading" | "success" | "invalid" | "not-found" | "erro
 
 type AnalysisRestoreState = "idle" | "loading" | "ready" | "error";
 
-/** GET analysis에 record 정보가 붙기 전까지 세션 내 수정/승인 결과만 보관한다. */
+/** GET analysis에 record 정보가 붙기 전까지 세션 내 수정/승인/메모리 등록 결과만 보관한다. */
 type AnalysisRecordState = {
   recordStatus: AnalysisRecordStatus;
   recordId: number | null;
   approvedAt: string | null;
+  memoryEnabled: boolean;
+  memoryEnabledAt: string | null;
 };
 
 type FollowUpTaskState = {
@@ -94,15 +102,6 @@ function classifySourceError(error: unknown): PullRequestSourceState {
   }
   if (code === "GITHUB_4041") return "not-found";
   return "error";
-}
-
-function getAnalysisFeedbackMessage(error: unknown, fallback: string) {
-  const code = getAnalysisApiErrorCode(error);
-  if (code === "AI_ANALYSIS_4041") return "요청한 AI 분석을 찾을 수 없습니다.";
-  if (code === "AI_ANALYSIS_4001") return "분석을 요청할 수 없는 상태입니다.";
-  if (code === "AI_ANALYSIS_4031") return "이 분석에 접근할 권한이 없습니다.";
-  if (code === "AI_ANALYSIS_5031") return "AI 분석 서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해주세요.";
-  return getApiErrorMessage(error, fallback);
 }
 
 function formatPullRequestDate(value: string) {
@@ -255,6 +254,7 @@ function AnalysisFeedback({
 
 export function PullRequestReviewScreen() {
   const { projectId = "", pullRequestId, analysisId } = useParams();
+  const { project } = useOutletContext<ProjectWorkspaceContextValue>();
   const [feedback, setFeedback] = useState("");
   const [analysisRequesting, setAnalysisRequesting] = useState(false);
   const [analysisActionPending, setAnalysisActionPending] = useState(false);
@@ -315,6 +315,13 @@ export function PullRequestReviewScreen() {
     && canApproveAnalysisWhileEditing(isEditingResult)
     && Boolean(validAnalysisId)
     && analysisStatus === "COMPLETED";
+  const canRegisterMemory = canRegisterAnalysisMemory({
+    recordStatus: analysisRecord?.recordStatus,
+    memoryEnabled: analysisRecord?.memoryEnabled,
+    pending: recordActionPending,
+    permissionRole: project?.myPermissionRole,
+  }) && Boolean(validAnalysisId);
+  const canManageMemory = canManageAnalysisMemory(project?.myPermissionRole);
   const canRequestAnalysis = (
     !isPullRequestRoute || analysisRestoreState === "ready"
   ) && canRequestAnalysisAction({
@@ -528,11 +535,7 @@ export function PullRequestReviewScreen() {
   }, [analysisPrNumber, isAnalysisRoute, projectId, sourceRetryKey]);
 
   const applyRecordResponse = (response: AnalysisRecordResponse) => {
-    setAnalysisRecord({
-      recordStatus: response.recordStatus,
-      recordId: typeof response.recordId === "number" ? response.recordId : null,
-      approvedAt: response.approvedAt ?? null,
-    });
+    setAnalysisRecord(mapAnalysisRecordResponse(response));
 
     if (response.analysisResult != null) {
       setAnalysis((current) => (
@@ -675,6 +678,27 @@ export function PullRequestReviewScreen() {
     }
   };
 
+  const registerMemory = async () => {
+    if (!validAnalysisId || !canRegisterMemory) return;
+
+    setRecordActionPending(true);
+    setFeedback("");
+
+    try {
+      const response = await registerAnalysisMemory(projectId, validAnalysisId);
+      applyRecordResponse(response);
+      if (!response.memoryEnabled || response.recordStatus !== "APPROVED") {
+        setFeedback("메모리 등록 요청은 처리되었지만 등록 완료 상태가 아닙니다.");
+        return;
+      }
+      setFeedback("프로젝트 메모리에 등록되었습니다.");
+    } catch (error: unknown) {
+      setFeedback(getAnalysisFeedbackMessage(error, "프로젝트 메모리 등록에 실패했습니다."));
+    } finally {
+      setRecordActionPending(false);
+    }
+  };
+
   const copyDraft = async () => {
     const title = pullRequest
       ? `PR #${pullRequest.prNumber} ${pullRequest.title}`
@@ -786,8 +810,14 @@ export function PullRequestReviewScreen() {
             <ApprovedPanel
               analysisResult={parsedAnalysisResult}
               approvedAt={analysisRecord?.approvedAt}
+              canManageMemory={canManageMemory}
+              canRegisterMemory={canRegisterMemory}
+              memoryEnabled={Boolean(analysisRecord?.memoryEnabled)}
+              memoryEnabledAt={analysisRecord?.memoryEnabledAt}
+              onRegisterMemory={() => void registerMemory()}
               projectId={projectId}
               pullRequest={pullRequest}
+              recordActionPending={recordActionPending}
             />
           ) : isAnalysisRoute && analysisStatus === "FAILED" ? (
             <AnalysisFailedPanel
@@ -2253,13 +2283,25 @@ function AnalysisCanceledPanel({
 function ApprovedPanel({
   analysisResult,
   approvedAt,
+  canManageMemory,
+  canRegisterMemory,
+  memoryEnabled,
+  memoryEnabledAt,
+  onRegisterMemory,
   projectId,
   pullRequest,
+  recordActionPending,
 }: {
   analysisResult: AnalysisResult | null;
   approvedAt?: string | null;
+  canManageMemory: boolean;
+  canRegisterMemory: boolean;
+  memoryEnabled: boolean;
+  memoryEnabledAt?: string | null;
+  onRegisterMemory: () => void;
   projectId: string;
   pullRequest?: PullRequestDetail;
+  recordActionPending: boolean;
 }) {
   const roleSummary = analysisResult?.affectedRoles.length
     ? analysisResult.affectedRoles.join(" / ")
@@ -2274,8 +2316,22 @@ function ApprovedPanel({
         <h3>{pullRequest?.title ?? analysisResult?.summary ?? "승인된 기록"}</h3>
         {approvedAt ? <p>승인 · {formatPullRequestDate(approvedAt)}</p> : null}
         {roleSummary ? <p>영향 · {roleSummary}</p> : null}
+        {memoryEnabled ? (
+          <p>
+            프로젝트 메모리 등록 완료
+            {memoryEnabledAt ? ` · ${formatPullRequestDate(memoryEnabledAt)}` : ""}
+          </p>
+        ) : null}
       </article>
       <div className="pull-request-review__state-actions">
+        {!memoryEnabled && canManageMemory ? (
+          <Button
+            disabled={!canRegisterMemory}
+            onClick={onRegisterMemory}
+          >
+            {recordActionPending ? "등록 중..." : "프로젝트 메모리에 등록"}
+          </Button>
+        ) : null}
         <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
           GitHub 작업 목록
         </Link>
