@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Navigate, Outlet, useNavigate, useParams } from "react-router-dom";
 import { ApiError, getApiErrorMessage } from "../../shared/api/client";
+import { getCurrentUser } from "../../shared/api/session";
 import { PageContainer } from "../../shared/layouts";
 import { mainNavigation } from "../../shared/navigation/routes";
 import { ErrorState, LoadingState } from "../../shared/ui";
@@ -27,6 +28,7 @@ export function WorkspaceShell() {
   const [projectNotFound, setProjectNotFound] = useState(false);
   const navigate = useNavigate();
   const { projectId } = useParams();
+  const currentUser = getCurrentUser();
 
   const loadProject = useCallback(async (signal?: AbortSignal) => {
     if (!projectId) {
@@ -88,8 +90,8 @@ export function WorkspaceShell() {
       <TopBar
         title={projectName}
         subtitle={repositoryLabel}
-        user="홍길동"
-        userEmail="hong@example.com"
+        user={currentUser?.username}
+        userEmail={currentUser?.loginId}
         onMenuClick={() => setSidebarOpen(true)}
       />
 

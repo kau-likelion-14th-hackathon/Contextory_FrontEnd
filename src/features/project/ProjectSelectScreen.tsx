@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getApiErrorMessage } from "../../shared/api/client";
+import { getCurrentUser } from "../../shared/api/session";
 import { PageContainer, ResponsiveGrid } from "../../shared/layouts";
 import { EmptyState, ErrorState, LoadingState, Pagination, SearchInput } from "../../shared/ui";
 import { TopBar } from "../workspace/components/TopBar";
@@ -17,6 +18,7 @@ type RequestState = "loading" | "success" | "error";
 
 export function ProjectSelectScreen() {
   const navigate = useNavigate();
+  const currentUser = getCurrentUser();
   const [currentPage, setCurrentPage] = useState(1);
   const [requestState, setRequestState] = useState<RequestState>("loading");
   const [projectList, setProjectList] = useState<ProjectListResponse>();
@@ -58,8 +60,11 @@ export function ProjectSelectScreen() {
 
   return (
     <main className="project-select">
-      {/* TODO: 실제 로그인 사용자 이름으로 교체 */}
-      <TopBar title="내 프로젝트" user="홍길동" />
+      <TopBar
+        title="내 프로젝트"
+        user={currentUser?.username}
+        userEmail={currentUser?.loginId}
+      />
 
       <PageContainer size="full">
         <div className="project-select__content">
