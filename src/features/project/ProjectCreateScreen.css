@@ -52,104 +52,6 @@
   min-height: 0;
 }
 
-.project-create__steps ol {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.project-create__step {
-  min-width: 0;
-  position: relative;
-}
-
-.project-create__step:not(:last-child)::after {
-  background: var(--color-border);
-  content: "";
-  height: 1px;
-  left: calc(100% - 4px);
-  position: absolute;
-  top: 22px;
-  width: 20px;
-  z-index: 0;
-}
-
-.project-create__step--completed:not(:last-child)::after {
-  background: var(--color-primary);
-}
-
-.project-create__step button {
-  align-items: center;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  color: var(--color-text-muted);
-  display: flex;
-  gap: 10px;
-  min-height: 62px;
-  min-width: 0;
-  padding: 8px 12px;
-  text-align: left;
-  width: 100%;
-}
-
-.project-create__step button:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
-.project-create__step--completed button {
-  color: var(--color-primary);
-  cursor: pointer;
-}
-
-.project-create__step--current button {
-  background: var(--color-primary-soft);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.project-create__step button > span:first-child {
-  align-items: center;
-  background: var(--color-surface-muted);
-  border-radius: 50%;
-  display: inline-flex;
-  flex: 0 0 30px;
-  font-size: 12px;
-  font-weight: 800;
-  height: 30px;
-  justify-content: center;
-}
-
-.project-create__step--current button > span:first-child,
-.project-create__step--completed button > span:first-child {
-  background: var(--color-primary);
-  color: var(--color-text-on-primary);
-}
-
-.project-create__step button > span:last-child {
-  display: grid;
-  min-width: 0;
-}
-
-.project-create__step small,
-.project-create__step strong {
-  overflow-wrap: anywhere;
-}
-
-.project-create__step small {
-  font-size: 10px;
-  font-weight: 500;
-}
-
-.project-create__step strong {
-  color: currentColor;
-  font-size: 13px;
-}
-
 .project-create__panel {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -195,12 +97,6 @@
 .project-create__panel-heading h2 {
   font-size: 22px;
   line-height: 1.4;
-  outline: none;
-}
-
-.project-create__panel-heading h2:focus-visible {
-  border-radius: var(--radius-sm);
-  box-shadow: 0 0 0 3px var(--color-focus-ring);
 }
 
 .project-create__panel-heading p {
@@ -221,10 +117,7 @@
   min-width: 0;
 }
 
-.project-create__field > label,
-.project-create__roles legend,
-.project-create__repositories legend,
-.project-create__invite-link > label {
+.project-create__field > label {
   color: var(--color-text-primary);
   font-size: 14px;
   font-weight: 700;
@@ -248,8 +141,7 @@
 }
 
 .project-create__textarea:focus,
-.project-create__field select:focus,
-.project-create__roles:focus-visible {
+.project-create__field select:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-focus-ring);
   outline: none;
@@ -266,342 +158,26 @@
   margin: 0;
 }
 
-.project-create__roles,
-.project-create__repositories {
-  border: 0;
-  display: grid;
-  gap: 10px;
-  margin: 0;
-  min-width: 0;
-  padding: 0;
-}
-
-.project-create__roles > div {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.project-create__roles label {
-  cursor: pointer;
-  min-width: 0;
-  position: relative;
-}
-
-.project-create__roles input {
-  height: 1px;
-  opacity: 0;
-  position: absolute;
-  width: 1px;
-}
-
-.project-create__roles label span {
-  align-items: center;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-strong);
-  border-radius: 999px;
-  display: inline-flex;
-  font-size: 12px;
-  min-height: 36px;
-  padding: 7px 12px;
-}
-
-.project-create__roles input:checked + span {
-  background: var(--color-primary-soft);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  font-weight: 700;
-}
-
-.project-create__roles input:focus-visible + span,
-.project-create__step button:focus-visible,
-.project-create__repository:has(input:focus-visible) {
-  box-shadow: 0 0 0 3px var(--color-focus-ring);
-  outline: none;
-}
-
-.project-create__notice,
-.project-create__status {
+.project-create__notice {
+  background: var(--color-info-soft);
   border-radius: var(--radius-md);
+  color: var(--color-info);
   display: grid;
   gap: 4px;
   min-width: 0;
   padding: 14px 16px;
-}
-
-.project-create__notice {
-  background: var(--color-info-soft);
-  color: var(--color-info);
-}
-
-.project-create__notice p,
-.project-create__status p {
-  margin: 0;
-  overflow-wrap: anywhere;
 }
 
 .project-create__notice p {
   color: var(--color-text-secondary);
   font-size: 12px;
-}
-
-.project-create__repositories {
-  gap: 10px;
-}
-
-.project-create__repository {
-  align-items: flex-start;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  display: flex;
-  gap: 12px;
-  min-width: 0;
-  padding: 16px;
-}
-
-.project-create__repository--selected {
-  background: var(--color-primary-soft);
-  border-color: var(--color-primary);
-}
-
-.project-create__repository > input {
-  accent-color: var(--color-primary);
-  flex: 0 0 auto;
-  height: 18px;
-  margin: 3px 0 0;
-  width: 18px;
-}
-
-.project-create__repository-copy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.project-create__repository-copy > strong,
-.project-create__repository-copy > span {
+  margin: 0;
   overflow-wrap: anywhere;
-}
-
-.project-create__repository-copy > span {
-  color: var(--color-text-muted);
-  font-size: 12px;
-}
-
-.project-create__repository-meta {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.project-create__repository-meta code {
-  font-family: var(--font-mono);
-}
-
-.project-create__status--success {
-  background: var(--color-success-soft);
-  color: var(--color-primary);
-}
-
-.project-create__status--idle {
-  background: var(--color-surface-muted);
-  color: var(--color-text-secondary);
-}
-
-.project-create__status--error {
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
-}
-
-.project-create__status p {
-  color: var(--color-text-secondary);
-  font-size: 12px;
-}
-
-.project-create__connection-actions {
-  display: flex;
-  justify-content: flex-start;
-}
-
-.project-create__invite-link {
-  background: var(--color-surface-muted);
-  border-radius: var(--radius-md);
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-  padding: 16px;
-}
-
-.project-create__invite-link > div {
-  align-items: center;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-width: 0;
-}
-
-.project-create__invite-link p {
-  color: var(--color-text-muted);
-  font-size: 12px;
-  margin: 0;
-}
-
-.project-create__members {
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-}
-
-.project-create__section-heading {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-}
-
-.project-create__section-heading h3 {
-  font-size: 16px;
-  margin: 0;
-}
-
-.project-create__members ul {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  list-style: none;
-  margin: 0;
-  overflow: hidden;
-  padding: 0;
-}
-
-.project-create__members li {
-  align-items: center;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: 36px minmax(160px, 1fr) minmax(180px, 1.4fr) auto;
-  min-width: 0;
-  padding: 14px 16px;
-}
-
-.project-create__members li + li {
-  border-top: 1px solid var(--color-border);
-}
-
-.project-create__avatar {
-  align-items: center;
-  background: var(--color-primary-soft);
-  border-radius: 50%;
-  color: var(--color-primary);
-  display: inline-flex;
-  font-size: 12px;
-  font-weight: 800;
-  height: 36px;
-  justify-content: center;
-  width: 36px;
-}
-
-.project-create__members li > div:not(.project-create__member-roles) {
-  display: grid;
-  min-width: 0;
-}
-
-.project-create__members li > div strong,
-.project-create__members li > div span {
-  overflow-wrap: anywhere;
-}
-
-.project-create__members li > div span,
-.project-create__member-state {
-  color: var(--color-text-muted);
-  font-size: 12px;
-}
-
-.project-create__member-roles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-}
-
-.project-create__members-note {
-  color: var(--color-text-muted);
-  font-size: 12px;
-  margin: 0;
-}
-
-.project-create__complete {
-  align-items: center;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  display: grid;
-  gap: 12px;
-  justify-items: center;
-  min-height: 420px;
-  padding: 32px;
-  text-align: center;
-}
-
-.project-create__complete > span {
-  align-items: center;
-  background: var(--color-primary-soft);
-  border-radius: 50%;
-  color: var(--color-primary);
-  display: inline-flex;
-  font-size: 28px;
-  height: 64px;
-  justify-content: center;
-  width: 64px;
-}
-
-.project-create__complete h2,
-.project-create__complete p {
-  margin: 0;
-}
-
-.project-create__complete h2 {
-  outline: none;
-}
-
-.project-create__complete p {
-  color: var(--color-text-muted);
-  max-width: 560px;
 }
 
 @media (max-width: 767px) {
   .project-create__content {
     gap: 16px;
-  }
-
-  .project-create__steps ol {
-    gap: 6px;
-  }
-
-  .project-create__step:not(:last-child)::after {
-    display: none;
-  }
-
-  .project-create__step button {
-    align-items: center;
-    flex-direction: column;
-    gap: 4px;
-    min-height: 88px;
-    padding: 8px 4px;
-    text-align: center;
-  }
-
-  .project-create__step button > span:first-child {
-    flex-basis: 28px;
-    height: 28px;
-    width: 28px;
-  }
-
-  .project-create__step small {
-    font-size: 9px;
-  }
-
-  .project-create__step strong {
-    font-size: 11px;
   }
 
   .project-create__panel {
@@ -615,34 +191,6 @@
 
   .project-create__panel-heading h2 {
     font-size: 20px;
-  }
-
-  .project-create__roles label span {
-    min-height: 44px;
-  }
-
-  .project-create__connection-actions .ui-button,
-  .project-create__invite-link .ui-button {
-    width: 100%;
-  }
-
-  .project-create__invite-link > div {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .project-create__members li {
-    align-items: start;
-    grid-template-columns: 36px minmax(0, 1fr);
-  }
-
-  .project-create__member-roles,
-  .project-create__member-state {
-    grid-column: 2;
-  }
-
-  .project-create__complete {
-    min-height: 360px;
-    padding: 24px 16px;
   }
 }
 
