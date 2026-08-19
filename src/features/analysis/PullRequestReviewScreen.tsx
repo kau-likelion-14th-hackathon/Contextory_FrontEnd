@@ -551,23 +551,32 @@ export function PullRequestReviewScreen() {
     let content = title;
 
     if (parsedAnalysisResult) {
-      content = [
-        title,
-        parsedAnalysisResult.summary,
-        parsedAnalysisResult.purpose,
-        parsedAnalysisResult.changeReason,
-        parsedAnalysisResult.before,
-        parsedAnalysisResult.after,
-        ...parsedAnalysisResult.changes.map((change) => `${change.filePath}: ${change.description}`),
-        ...parsedAnalysisResult.relatedFeatures.map((feature) => `관련 기능: ${feature}`),
-        ...parsedAnalysisResult.affectedRoles.map((role) => `영향 역할: ${role}`),
-        ...parsedAnalysisResult.roleImpacts.map((item) => `${item.role}: ${item.impact}`),
-        ...parsedAnalysisResult.impacts.map((impact) => `영향: ${impact}`),
-        ...parsedAnalysisResult.risks.map((risk) => `리스크: ${risk}`),
-        ...parsedAnalysisResult.recommendations.map((item) => `권장: ${item}`),
-        ...parsedAnalysisResult.needsConfirmation.map((item) => `확인 필요: ${item}`),
-        ...parsedAnalysisResult.followUpTasks.map((item) => `후속 작업: ${item.task}`),
-      ].filter(Boolean).join("\n");
+      if (parsedAnalysisResult.hasExtendedFields) {
+        content = [
+          title,
+          parsedAnalysisResult.summary,
+          parsedAnalysisResult.purpose,
+          parsedAnalysisResult.changeReason,
+          parsedAnalysisResult.before,
+          parsedAnalysisResult.after,
+          ...parsedAnalysisResult.relatedFeatures.map((feature) => `관련 기능: ${feature}`),
+          ...parsedAnalysisResult.affectedRoles.map((role) => `영향 역할: ${role}`),
+          ...parsedAnalysisResult.roleImpacts.map((item) => `${item.role}: ${item.impact}`),
+          ...parsedAnalysisResult.risks.map((risk) => `리스크: ${risk}`),
+          ...parsedAnalysisResult.needsConfirmation.map((item) => `확인 필요: ${item}`),
+          ...parsedAnalysisResult.changes.map((change) => `${change.filePath}: ${change.description}`),
+          ...parsedAnalysisResult.followUpTasks.map((item) => `후속 작업: ${item.task}`),
+        ].filter(Boolean).join("\n");
+      } else {
+        content = [
+          title,
+          parsedAnalysisResult.summary,
+          ...parsedAnalysisResult.changes.map((change) => `${change.filePath}: ${change.description}`),
+          ...parsedAnalysisResult.impacts.map((impact) => `영향: ${impact}`),
+          ...parsedAnalysisResult.risks.map((risk) => `리스크: ${risk}`),
+          ...parsedAnalysisResult.recommendations.map((item) => `권장: ${item}`),
+        ].filter(Boolean).join("\n");
+      }
     }
 
     try {
