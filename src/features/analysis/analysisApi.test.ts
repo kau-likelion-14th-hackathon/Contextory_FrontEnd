@@ -135,11 +135,15 @@ describe("Analysis API", () => {
       analysisResult: null,
       analysisStatus: "PROCESSING",
       analyzedHeadSha: null,
+      approvedAt: null,
       completedAt: null,
       errorMessage: null,
+      memoryEnabled: null,
       modelName: null,
       prNumber: 128,
       projectId: 39,
+      recordId: null,
+      recordStatus: null,
       requestedAt: "2026-08-17T00:00:00Z",
       startedAt: null,
     };
@@ -153,6 +157,89 @@ describe("Analysis API", () => {
       "https://api.test/api/projects/39/analyses/12",
       expect.objectContaining({ method: "GET", signal: controller.signal }),
     );
+  });
+
+  it("maps analysis detail record fields without inventing missing values", async () => {
+    const { mapAnalysisDetailRecord, mapAnalysisRecordResponse } = await loadAnalysisApi();
+
+    expect(mapAnalysisDetailRecord({
+      approvedAt: null,
+      memoryEnabled: null,
+      recordId: null,
+      recordStatus: null,
+    })).toBeNull();
+
+    expect(mapAnalysisDetailRecord({
+      approvedAt: null,
+      memoryEnabled: false,
+      recordId: 90,
+      recordStatus: null,
+    })).toBeNull();
+
+    expect(mapAnalysisDetailRecord({
+      approvedAt: null,
+      memoryEnabled: false,
+      recordId: null,
+      recordStatus: "DRAFT",
+    })).toBeNull();
+
+    expect(mapAnalysisDetailRecord({
+      approvedAt: null,
+      memoryEnabled: false,
+      recordId: 90,
+      recordStatus: "DRAFT",
+    })).toEqual({
+      approvedAt: null,
+      memoryEnabled: false,
+      memoryEnabledAt: null,
+      recordId: 90,
+      recordStatus: "DRAFT",
+    });
+
+    expect(mapAnalysisDetailRecord({
+      approvedAt: "2026-08-19T02:00:00Z",
+      memoryEnabled: false,
+      recordId: 91,
+      recordStatus: "APPROVED",
+    })).toEqual({
+      approvedAt: "2026-08-19T02:00:00Z",
+      memoryEnabled: false,
+      memoryEnabledAt: null,
+      recordId: 91,
+      recordStatus: "APPROVED",
+    });
+
+    expect(mapAnalysisDetailRecord({
+      approvedAt: "2026-08-19T02:00:00Z",
+      memoryEnabled: true,
+      recordId: 92,
+      recordStatus: "APPROVED",
+    })).toEqual({
+      approvedAt: "2026-08-19T02:00:00Z",
+      memoryEnabled: true,
+      memoryEnabledAt: null,
+      recordId: 92,
+      recordStatus: "APPROVED",
+    });
+
+    const mappedFromRecordApi = mapAnalysisRecordResponse({
+      analysisId: 12,
+      analysisResult: null,
+      approvedAt: "2026-08-19T02:00:00Z",
+      approvedBy: 2,
+      createdAt: "2026-08-19T00:00:00Z",
+      editedBy: null,
+      memoryEnabled: true,
+      memoryEnabledAt: "2026-08-19T03:00:00Z",
+      memoryEnabledBy: 2,
+      prNumber: 128,
+      projectId: 39,
+      recordId: 90,
+      recordStatus: "APPROVED",
+      updatedAt: "2026-08-19T03:00:00Z",
+    });
+    expect(mappedFromRecordApi.memoryEnabledAt).toBe("2026-08-19T03:00:00Z");
+    expect(mappedFromRecordApi.memoryEnabled).toBe(true);
   });
 
   it("retries analysis from the retry URL", async () => {

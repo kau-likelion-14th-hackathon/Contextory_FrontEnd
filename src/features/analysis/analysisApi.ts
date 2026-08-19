@@ -29,6 +29,10 @@ export type AnalysisDetail = {
   requestedAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  recordId: number | null;
+  recordStatus: "DRAFT" | "APPROVED" | null;
+  approvedAt: string | null;
+  memoryEnabled: boolean | null;
 };
 
 export type AnalysisRetryResponse = {
@@ -400,6 +404,24 @@ export function mapAnalysisRecordResponse(response: AnalysisRecordResponse) {
     approvedAt: response.approvedAt ?? null,
     memoryEnabled: Boolean(response.memoryEnabled),
     memoryEnabledAt: response.memoryEnabledAt ?? null,
+  };
+}
+
+/** GET analysis 상세의 record 필드로 세션 상태를 복원한다. 없는 값은 추론하지 않는다. */
+export function mapAnalysisDetailRecord(detail: Pick<
+  AnalysisDetail,
+  "recordId" | "recordStatus" | "approvedAt" | "memoryEnabled"
+>) {
+  const { recordId, recordStatus } = detail;
+  if (typeof recordId !== "number") return null;
+  if (recordStatus !== "DRAFT" && recordStatus !== "APPROVED") return null;
+
+  return {
+    recordId,
+    recordStatus,
+    approvedAt: detail.approvedAt ?? null,
+    memoryEnabled: detail.memoryEnabled === true,
+    memoryEnabledAt: null,
   };
 }
 
