@@ -4,6 +4,18 @@ import { getApiErrorMessage } from "../../shared/api/client";
 import { PageContainer } from "../../shared/layouts";
 import { Badge, Button, EmptyState, ErrorState, LoadingState, Modal } from "../../shared/ui";
 import {
+  cancelAnalysis,
+  getAnalysis,
+  getAnalysisApiErrorCode,
+  isActiveAnalysisStatus,
+  parseAnalysisResult,
+  requestAnalysis,
+  retryAnalysis,
+  type AnalysisDetail,
+  type AnalysisResult,
+  type AnalysisStatus,
+} from "./analysisApi";
+import {
   getPullRequest,
   getPullRequestApiErrorCode,
   getPullRequestFiles,
@@ -12,25 +24,23 @@ import {
 } from "../github/pullRequestApi";
 import {
   pullRequestReviewMock,
-  pullRequestReviewStates,
-  type PullRequestReviewState,
   type ReviewFollowUp,
 } from "./pullRequestReviewMock";
 import "./PullRequestReviewScreen.css";
 
-const stateCopy: Record<
-  PullRequestReviewState,
+const POLLING_INTERVAL_MS = 2000;
+const DEFAULT_VISIBLE_ANALYSIS_CHANGES = 8;
+
+const analysisStatusCopy: Record<
+  AnalysisStatus,
   { label: string; variant: "warning" | "info" | "danger" | "success" }
 > = {
-  review: { label: "검토 필요", variant: "warning" },
-  analyzing: { label: "분석 중", variant: "info" },
-  failed: { label: "분석 실패", variant: "danger" },
-  approved: { label: "승인 완료", variant: "success" },
+  PENDING: { label: "분석 대기", variant: "warning" },
+  PROCESSING: { label: "분석 중", variant: "info" },
+  COMPLETED: { label: "분석 완료", variant: "success" },
+  FAILED: { label: "분석 실패", variant: "danger" },
+  CANCELED: { label: "분석 취소", variant: "warning" },
 };
-
-function isReviewState(value: string | null): value is PullRequestReviewState {
-  return value !== null && pullRequestReviewStates.includes(value as PullRequestReviewState);
-}
 
 type PullRequestSourceState =
   | "loading"
@@ -41,6 +51,8 @@ type PullRequestSourceState =
   | "github-connection-required"
   | "error";
 
+type AnalysisLoadState = "loading" | "success" | "invalid" | "not-found" | "error";
+
 function classifySourceError(error: unknown): PullRequestSourceState {
   const code = getPullRequestApiErrorCode(error);
   if (code === "PROJECT_REPOSITORY_4041") return "no-repository";
@@ -49,6 +61,15 @@ function classifySourceError(error: unknown): PullRequestSourceState {
   }
   if (code === "GITHUB_4041") return "not-found";
   return "error";
+}
+
+function getAnalysisFeedbackMessage(error: unknown, fallback: string) {
+  const code = getAnalysisApiErrorCode(error);
+  if (code === "AI_ANALYSIS_4041") return "요청한 AI 분석을 찾을 수 없습니다.";
+  if (code === "AI_ANALYSIS_4001") return "분석을 요청할 수 없는 상태입니다.";
+  if (code === "AI_ANALYSIS_4031") return "이 분석에 접근할 권한이 없습니다.";
+  if (code === "AI_ANALYSIS_5031") return "AI 분석 서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해주세요.";
+  return getApiErrorMessage(error, fallback);
 }
 
 function formatPullRequestDate(value: string) {
@@ -138,14 +159,76 @@ function PullRequestSourceFeedback({
   );
 }
 
+function AnalysisFeedback({
+  state,
+  projectId,
+  errorMessage,
+  onRetry,
+}: {
+  state: Exclude<AnalysisLoadState, "success">;
+  projectId: string;
+  errorMessage: string;
+  onRetry: () => void;
+}) {
+  let content: React.ReactNode;
+
+  if (state === "loading") {
+    content = (
+      <LoadingState
+        description="AI 분석 상태와 연결된 Pull Request를 확인하고 있습니다."
+        title="AI 분석을 불러오는 중입니다"
+      />
+    );
+  } else if (state === "invalid") {
+    content = (
+      <EmptyState
+        description="유효한 분석 ID가 필요합니다."
+        details={(
+          <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
+            GitHub 작업 목록
+          </Link>
+        )}
+        title="분석을 찾을 수 없습니다"
+      />
+    );
+  } else if (state === "not-found") {
+    content = (
+      <EmptyState
+        description="요청한 AI 분석이 존재하지 않거나 삭제되었습니다."
+        details={(
+          <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
+            GitHub 작업 목록
+          </Link>
+        )}
+        title="AI 분석을 찾을 수 없습니다"
+      />
+    );
+  } else {
+    content = (
+      <ErrorState
+        action={{ label: "다시 시도", onClick: onRetry }}
+        description={errorMessage || "잠시 후 다시 시도해주세요."}
+        title="AI 분석을 불러오지 못했습니다"
+      />
+    );
+  }
+
+  return (
+    <main className="pull-request-review pull-request-review--source-state">
+      <PageContainer size="full">{content}</PageContainer>
+    </main>
+  );
+}
+
 export function PullRequestReviewScreen() {
   const { projectId = "", pullRequestId, analysisId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryState = searchParams.get("state");
-  const viewState = isReviewState(queryState) ? queryState : "review";
+  const isApprovedView = queryState === "approved";
   const [discardOpen, setDiscardOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [analysisStartedLocally, setAnalysisStartedLocally] = useState(false);
+  const [analysisRequesting, setAnalysisRequesting] = useState(false);
+  const [analysisActionPending, setAnalysisActionPending] = useState(false);
   const [followUps, setFollowUps] = useState<ReviewFollowUp[]>(
     pullRequestReviewMock.draft.followUps,
   );
@@ -154,6 +237,10 @@ export function PullRequestReviewScreen() {
   const [pullRequest, setPullRequest] = useState<PullRequestDetail>();
   const [pullRequestFiles, setPullRequestFiles] = useState<PullRequestFilesResponse>();
   const [sourceRetryKey, setSourceRetryKey] = useState(0);
+  const [analysis, setAnalysis] = useState<AnalysisDetail>();
+  const [analysisLoadState, setAnalysisLoadState] = useState<AnalysisLoadState>("loading");
+  const [analysisError, setAnalysisError] = useState("");
+  const [analysisRetryKey, setAnalysisRetryKey] = useState(0);
   const navigate = useNavigate();
   const routeReference = pullRequestId ?? analysisId ?? "";
   const isPullRequestRoute = pullRequestId !== undefined;
@@ -161,6 +248,18 @@ export function PullRequestReviewScreen() {
   const validPullRequestId = pullRequestId && /^\d+$/.test(pullRequestId) && Number(pullRequestId) > 0
     ? pullRequestId
     : undefined;
+  const validAnalysisId = analysisId && /^\d+$/.test(analysisId) && Number(analysisId) > 0
+    ? analysisId
+    : undefined;
+  const analysisPrNumber = analysis?.prNumber;
+  const parsedAnalysisResult = analysis?.analysisResult
+    ? parseAnalysisResult(analysis.analysisResult)
+    : null;
+  const analysisStatus = analysis?.analysisStatus;
+  const isAnalysisInProgress = analysisStatus ? isActiveAnalysisStatus(analysisStatus) : false;
+  const canShowCompletedWorkspace = isAnalysisRoute
+    && analysisStatus === "COMPLETED"
+    && !isApprovedView;
 
   useEffect(() => {
     if (!isPullRequestRoute) return;
@@ -197,38 +296,174 @@ export function PullRequestReviewScreen() {
     return () => controller.abort();
   }, [isPullRequestRoute, projectId, sourceRetryKey, validPullRequestId]);
 
-  const setViewState = (
-    nextState: PullRequestReviewState,
-    options?: { replace?: boolean },
-  ) => {
+  useEffect(() => {
+    if (!isAnalysisRoute) return;
+
+    if (!validAnalysisId) {
+      setAnalysisLoadState("invalid");
+      setAnalysis(undefined);
+      return;
+    }
+
+    let cancelled = false;
+    let pollTimer: number | undefined;
+    let requestController: AbortController | undefined;
+    let requestGeneration = 0;
+
+    const clearPollTimer = () => {
+      if (pollTimer !== undefined) {
+        window.clearTimeout(pollTimer);
+        pollTimer = undefined;
+      }
+    };
+
+    const schedulePoll = () => {
+      clearPollTimer();
+      pollTimer = window.setTimeout(() => {
+        void loadAnalysis({ isPoll: true });
+      }, POLLING_INTERVAL_MS);
+    };
+
+    const loadAnalysis = async ({ isPoll = false }: { isPoll?: boolean } = {}) => {
+      requestController?.abort();
+      requestController = new AbortController();
+      const currentGeneration = ++requestGeneration;
+      const signal = requestController.signal;
+
+      if (!isPoll) {
+        setAnalysisLoadState("loading");
+        setAnalysisError("");
+      }
+
+      try {
+        const detail = await getAnalysis(projectId, validAnalysisId, signal);
+        if (cancelled || signal.aborted || currentGeneration !== requestGeneration) return;
+
+        setAnalysis(detail);
+        setAnalysisLoadState("success");
+
+        if (isActiveAnalysisStatus(detail.analysisStatus)) {
+          schedulePoll();
+        } else {
+          clearPollTimer();
+        }
+      } catch (error: unknown) {
+        if (cancelled || signal.aborted || currentGeneration !== requestGeneration) return;
+
+        setAnalysis(undefined);
+        const code = getAnalysisApiErrorCode(error);
+        setAnalysisLoadState(code === "AI_ANALYSIS_4041" ? "not-found" : "error");
+        setAnalysisError(getAnalysisFeedbackMessage(error, "분석 정보를 불러오지 못했습니다."));
+        clearPollTimer();
+      }
+    };
+
+    void loadAnalysis();
+
+    return () => {
+      cancelled = true;
+      clearPollTimer();
+      requestController?.abort();
+    };
+  }, [analysisRetryKey, isAnalysisRoute, projectId, validAnalysisId]);
+
+  useEffect(() => {
+    if (!isAnalysisRoute || !analysisPrNumber) return;
+
+    const controller = new AbortController();
+    setSourceState("loading");
+    setSourceError("");
+
+    void Promise.all([
+      getPullRequest(projectId, analysisPrNumber, controller.signal),
+      getPullRequestFiles(projectId, analysisPrNumber, controller.signal),
+    ])
+      .then(([detail, files]) => {
+        if (controller.signal.aborted) return;
+        setPullRequest(detail);
+        setPullRequestFiles(files);
+        setSourceState("success");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setPullRequest(undefined);
+        setPullRequestFiles(undefined);
+        setSourceState(classifySourceError(error));
+        setSourceError(getApiErrorMessage(error, "Pull Request 원본 정보를 불러오지 못했습니다."));
+      });
+
+    return () => controller.abort();
+  }, [analysisPrNumber, isAnalysisRoute, projectId, sourceRetryKey]);
+
+  const setApprovedView = (options?: { replace?: boolean }) => {
     setSearchParams((currentParams) => {
       const nextParams = new URLSearchParams(currentParams);
-      if (nextState === "review") nextParams.delete("state");
-      else nextParams.set("state", nextState);
+      nextParams.set("state", "approved");
       return nextParams;
     }, { replace: options?.replace });
   };
 
-  useEffect(() => {
-    if (!analysisStartedLocally || viewState !== "analyzing") return;
+  const requestNewAnalysis = async (prNumber: number) => {
+    if (analysisRequesting) return;
 
-    const timer = window.setTimeout(() => {
-      setAnalysisStartedLocally(false);
-      setViewState("review", { replace: true });
-    }, 1600);
+    setAnalysisRequesting(true);
+    setFeedback("");
 
-    return () => window.clearTimeout(timer);
-  }, [analysisStartedLocally, viewState]);
+    try {
+      const response = await requestAnalysis(projectId, prNumber);
+      navigate(`/projects/${projectId}/analyses/${response.analysisId}`);
+    } catch (error: unknown) {
+      setFeedback(getAnalysisFeedbackMessage(error, "AI 분석을 요청하지 못했습니다."));
+    } finally {
+      setAnalysisRequesting(false);
+    }
+  };
 
   const startAnalysis = () => {
+    const prNumber = pullRequest?.prNumber;
+    if (!prNumber) return;
+    void requestNewAnalysis(prNumber);
+  };
+
+  const retryFailedAnalysis = async () => {
+    if (!validAnalysisId || analysisActionPending) return;
+
+    setAnalysisActionPending(true);
     setFeedback("");
-    setAnalysisStartedLocally(true);
-    setViewState("analyzing", { replace: true });
+
+    try {
+      const response = await retryAnalysis(projectId, validAnalysisId);
+      navigate(`/projects/${projectId}/analyses/${response.newAnalysisId}`);
+    } catch (error: unknown) {
+      setFeedback(getAnalysisFeedbackMessage(error, "분석 재시도에 실패했습니다."));
+    } finally {
+      setAnalysisActionPending(false);
+    }
+  };
+
+  const cancelInProgressAnalysis = async () => {
+    if (!validAnalysisId || analysisActionPending) return;
+
+    setAnalysisActionPending(true);
+    setFeedback("");
+
+    try {
+      const response = await cancelAnalysis(projectId, validAnalysisId);
+      setAnalysis((current) => (
+        current
+          ? { ...current, analysisStatus: response.analysisStatus }
+          : current
+      ));
+    } catch (error: unknown) {
+      setFeedback(getAnalysisFeedbackMessage(error, "분석 취소에 실패했습니다."));
+    } finally {
+      setAnalysisActionPending(false);
+    }
   };
 
   const approveReview = () => {
     setFeedback("");
-    setViewState("approved");
+    setApprovedView();
   };
 
   const saveDraft = () => {
@@ -236,18 +471,26 @@ export function PullRequestReviewScreen() {
   };
 
   const copyDraft = async () => {
-    const { draft } = pullRequestReviewMock;
-    const content = [
-      `[${draft.recordType}] ${isPullRequestRoute ? pullRequest?.title ?? "Pull Request" : `AI 분석 #${analysisId ?? ""}`}`,
-      draft.summary,
-      draft.purpose,
-      `변경 전: ${draft.before}`,
-      `변경 후: ${draft.after}`,
-    ].join("\n");
+    const title = pullRequest
+      ? `PR #${pullRequest.prNumber} ${pullRequest.title}`
+      : `AI 분석 #${analysisId ?? ""}`;
+
+    let content = title;
+
+    if (parsedAnalysisResult) {
+      content = [
+        title,
+        parsedAnalysisResult.summary,
+        ...parsedAnalysisResult.changes.map((change) => `${change.filePath}: ${change.description}`),
+        ...parsedAnalysisResult.impacts.map((impact) => `영향: ${impact}`),
+        ...parsedAnalysisResult.risks.map((risk) => `리스크: ${risk}`),
+        ...parsedAnalysisResult.recommendations.map((item) => `권장: ${item}`),
+      ].join("\n");
+    }
 
     try {
       await navigator.clipboard.writeText(content);
-      setFeedback("분석 초안 내용을 복사했습니다.");
+      setFeedback(parsedAnalysisResult ? "분석 결과를 복사했습니다." : "내용을 복사했습니다.");
     } catch {
       setFeedback("내용을 복사하지 못했습니다.");
     }
@@ -266,6 +509,30 @@ export function PullRequestReviewScreen() {
     navigate(`/projects/${projectId}/github`);
   };
 
+  if (isAnalysisRoute) {
+    if (!validAnalysisId || analysisLoadState !== "success") {
+      return (
+        <AnalysisFeedback
+          errorMessage={analysisError}
+          onRetry={() => setAnalysisRetryKey((key) => key + 1)}
+          projectId={projectId}
+          state={analysisLoadState === "success" ? "loading" : analysisLoadState}
+        />
+      );
+    }
+
+    if (sourceState !== "success" || !pullRequest || !pullRequestFiles || !analysis) {
+      return (
+        <PullRequestSourceFeedback
+          errorMessage={sourceError}
+          onRetry={() => setSourceRetryKey((key) => key + 1)}
+          projectId={projectId}
+          state={sourceState === "success" ? "loading" : sourceState}
+        />
+      );
+    }
+  }
+
   if (isPullRequestRoute && (sourceState !== "success" || !pullRequest || !pullRequestFiles)) {
     return (
       <PullRequestSourceFeedback
@@ -277,40 +544,66 @@ export function PullRequestReviewScreen() {
     );
   }
 
+  const showFooterActions = canShowCompletedWorkspace && !isApprovedView;
+
   return (
     <main className="pull-request-review" data-route-reference={routeReference}>
       <PageContainer size="full">
         <div className="pull-request-review__content">
           <ReviewHeader
             analysisId={isAnalysisRoute ? analysisId : undefined}
+            analysisRequesting={analysisRequesting}
+            analysisStatus={isAnalysisRoute ? analysis?.analysisStatus : undefined}
+            isApprovedView={isApprovedView}
             onAnalyze={startAnalysis}
             onApprove={approveReview}
-            pullRequest={isPullRequestRoute ? pullRequest : undefined}
+            pullRequest={pullRequest}
             projectId={projectId}
-            state={viewState}
           />
 
-          {viewState === "review" ? (
-            isPullRequestRoute && pullRequest && pullRequestFiles ? (
-              <ReviewWorkspace
-                files={pullRequestFiles}
-                followUps={followUps}
-                onToggleFollowUp={toggleFollowUp}
-                pullRequest={pullRequest}
-              />
-            ) : (
-              <DraftPanel followUps={followUps} onToggleFollowUp={toggleFollowUp} />
-            )
-          ) : (
-            <ReviewStatePanel
-              onAnalyze={startAnalysis}
-              pullRequest={isPullRequestRoute ? pullRequest : undefined}
+          {isApprovedView ? (
+            <ApprovedPanel
+              analysisResult={parsedAnalysisResult}
               projectId={projectId}
-              state={viewState}
+              pullRequest={pullRequest}
             />
-          )}
+          ) : isAnalysisRoute && analysisStatus === "FAILED" ? (
+            <AnalysisFailedPanel
+              actionPending={analysisActionPending}
+              errorMessage={analysis?.errorMessage}
+              onRetry={retryFailedAnalysis}
+              pullRequest={pullRequest}
+            />
+          ) : isAnalysisRoute && analysisStatus === "CANCELED" ? (
+            <AnalysisCanceledPanel
+              onAnalyze={startAnalysis}
+              projectId={projectId}
+              pullRequest={pullRequest}
+            />
+          ) : isAnalysisRoute && isAnalysisInProgress ? (
+            <AnalysisInProgressPanel
+              actionPending={analysisActionPending}
+              analysisStatus={analysisStatus!}
+              onCancel={cancelInProgressAnalysis}
+            />
+          ) : canShowCompletedWorkspace && pullRequest && pullRequestFiles ? (
+            <ReviewWorkspace
+              analysisResult={parsedAnalysisResult}
+              files={pullRequestFiles}
+              followUps={followUps}
+              onToggleFollowUp={toggleFollowUp}
+              pullRequest={pullRequest}
+            />
+          ) : isPullRequestRoute && pullRequest && pullRequestFiles ? (
+            <ReviewWorkspace
+              files={pullRequestFiles}
+              followUps={followUps}
+              onToggleFollowUp={toggleFollowUp}
+              pullRequest={pullRequest}
+            />
+          ) : null}
 
-          {viewState === "review" ? (
+          {showFooterActions ? (
             <footer className="pull-request-review__footer-actions">
               <div>
                 <Button onClick={() => setDiscardOpen(true)} variant="secondary">
@@ -361,22 +654,43 @@ export function PullRequestReviewScreen() {
 }
 
 type ReviewHeaderProps = {
-  state: PullRequestReviewState;
   projectId: string;
   analysisId?: string;
+  analysisStatus?: AnalysisStatus;
+  analysisRequesting: boolean;
+  isApprovedView: boolean;
   pullRequest?: PullRequestDetail;
   onAnalyze: () => void;
   onApprove: () => void;
 };
 
-function ReviewHeader({ state, projectId, analysisId, pullRequest, onAnalyze, onApprove }: ReviewHeaderProps) {
-  const status = stateCopy[state];
+function ReviewHeader({
+  analysisId,
+  analysisRequesting,
+  analysisStatus,
+  isApprovedView,
+  onAnalyze,
+  onApprove,
+  projectId,
+  pullRequest,
+}: ReviewHeaderProps) {
+  const status = isApprovedView
+    ? { label: "승인 완료", variant: "success" as const }
+    : analysisStatus
+      ? analysisStatusCopy[analysisStatus]
+      : { label: "검토 필요", variant: "warning" as const };
+  const analyzeDisabled = analysisRequesting
+    || (analysisStatus ? isActiveAnalysisStatus(analysisStatus) : false);
 
   return (
     <header className="pull-request-review__header">
       <div className="pull-request-review__header-copy">
         <div>
-          <h1>{pullRequest ? `PR #${pullRequest.prNumber} ${pullRequest.title}` : `AI 분석 #${analysisId ?? ""}`}</h1>
+          <h1>
+            {pullRequest
+              ? `PR #${pullRequest.prNumber} ${pullRequest.title}`
+              : `AI 분석 #${analysisId ?? ""}`}
+          </h1>
           <Badge variant={status.variant}>{status.label}</Badge>
         </div>
         {pullRequest ? (
@@ -400,20 +714,25 @@ function ReviewHeader({ state, projectId, analysisId, pullRequest, onAnalyze, on
             GitHub에서 보기
           </a>
         ) : null}
-        {state === "approved" ? (
+        {isApprovedView ? (
           <Link
             className="ui-button ui-button--secondary ui-button--sm"
             to={`/projects/${projectId}/records`}
           >
             메모리 보기
           </Link>
-        ) : (
-          <Button disabled={state === "analyzing"} onClick={onAnalyze} size="sm" variant={state === "failed" ? "primary" : "secondary"}>
-            AI 재분석
+        ) : analysisStatus === "FAILED" ? null : (
+          <Button
+            disabled={analyzeDisabled || !pullRequest}
+            onClick={onAnalyze}
+            size="sm"
+            variant={analysisStatus === "CANCELED" ? "primary" : "secondary"}
+          >
+            {analysisRequesting ? "분석 요청 중..." : "AI 재분석"}
           </Button>
         )}
-        <Button disabled={state !== "review"} onClick={onApprove} size="sm">
-          {state === "approved" ? "승인 완료" : "승인 요청"}
+        <Button disabled={!isApprovedView && analysisStatus !== "COMPLETED"} onClick={onApprove} size="sm">
+          {isApprovedView ? "승인 완료" : "승인 요청"}
         </Button>
       </div>
     </header>
@@ -423,6 +742,7 @@ function ReviewHeader({ state, projectId, analysisId, pullRequest, onAnalyze, on
 type ReviewWorkspaceProps = {
   followUps: ReviewFollowUp[];
   onToggleFollowUp: (id: string) => void;
+  analysisResult?: AnalysisResult | null;
 };
 
 type ReviewWorkspaceDataProps = ReviewWorkspaceProps & {
@@ -430,11 +750,25 @@ type ReviewWorkspaceDataProps = ReviewWorkspaceProps & {
   files: PullRequestFilesResponse;
 };
 
-function ReviewWorkspace({ files, followUps, onToggleFollowUp, pullRequest }: ReviewWorkspaceDataProps) {
+function ReviewWorkspace({
+  analysisResult,
+  files,
+  followUps,
+  onToggleFollowUp,
+  pullRequest,
+}: ReviewWorkspaceDataProps) {
   return (
     <div className="pull-request-review__columns">
       <GitHubSourcePanel files={files} pullRequest={pullRequest} />
-      <DraftPanel followUps={followUps} onToggleFollowUp={onToggleFollowUp} />
+      {analysisResult ? (
+        <AnalysisResultPanel
+          analysisResult={analysisResult}
+          followUps={followUps}
+          onToggleFollowUp={onToggleFollowUp}
+        />
+      ) : (
+        <DraftPlaceholderPanel />
+      )}
     </div>
   );
 }
@@ -624,149 +958,294 @@ function GitHubSourcePanel({
   );
 }
 
-function DraftPanel({ followUps, onToggleFollowUp }: ReviewWorkspaceProps) {
-  const { draft } = pullRequestReviewMock;
-
+function DraftPlaceholderPanel() {
   return (
     <section className="pull-request-review__panel pull-request-review__draft" aria-labelledby="draft-title">
       <header>
         <h2 id="draft-title">프로젝트 기록 초안 (AI 분석 결과)</h2>
-        <Badge variant="success">{draft.version}</Badge>
+        <Badge variant="neutral">대기 중</Badge>
+      </header>
+      <div className="pull-request-review__draft-empty">
+        <p>AI 분석을 실행하면 PR 변경 내용을 바탕으로 프로젝트 기록 초안이 생성됩니다.</p>
+        <p>상단의 <strong>AI 재분석</strong> 버튼으로 분석을 시작할 수 있습니다.</p>
+      </div>
+    </section>
+  );
+}
+
+function AnalysisResultPanel({
+  analysisResult,
+  followUps,
+  onToggleFollowUp,
+}: ReviewWorkspaceProps & { analysisResult: AnalysisResult }) {
+  const { draft } = pullRequestReviewMock;
+  const [showAllChanges, setShowAllChanges] = useState(false);
+  const hiddenChangeCount = Math.max(
+    analysisResult.changes.length - DEFAULT_VISIBLE_ANALYSIS_CHANGES,
+    0,
+  );
+  const visibleChanges = showAllChanges || hiddenChangeCount === 0
+    ? analysisResult.changes
+    : analysisResult.changes.slice(0, DEFAULT_VISIBLE_ANALYSIS_CHANGES);
+
+  return (
+    <section
+      aria-labelledby="analysis-result-title"
+      className="pull-request-review__panel pull-request-review__draft pull-request-review__analysis-result"
+    >
+      <header className="pull-request-review__analysis-header">
+        <div>
+          <h2 id="analysis-result-title">AI 분석 결과</h2>
+          <div className="pull-request-review__analysis-header-meta">
+            <Badge variant="success">분석 완료</Badge>
+            <Badge variant="info">{draft.recordType}</Badge>
+          </div>
+        </div>
       </header>
 
-      <div className="pull-request-review__draft-grid">
-        <div className="pull-request-review__draft-column">
-          <DraftSection number="1" title="기록 유형">
-            <Badge variant="info">{draft.recordType}</Badge>
-          </DraftSection>
-          <DraftSection number="2" title="작업 요약"><p>{draft.summary}</p></DraftSection>
-          <DraftSection number="3" title="작업 목적"><p>{draft.purpose}</p></DraftSection>
-          <DraftSection number="4" title="변경 전 / 변경 후">
-            <div className="pull-request-review__before-after">
-              <div><strong>변경 전</strong><span>{draft.before}</span></div>
-              <div><strong>변경 후</strong><span>{draft.after}</span></div>
-            </div>
-          </DraftSection>
-          <DraftSection number="5" title="관련 기능">
-            <div className="pull-request-review__tags">
-              {draft.featureTags.map((tag) => <Badge key={tag} variant="success">{tag}</Badge>)}
-            </div>
-          </DraftSection>
-        </div>
-
-        <div className="pull-request-review__draft-column">
-          <DraftSection number="6" title="역할별 영향">
-            <div className="pull-request-review__impacts">
-              {draft.impacts.map((impact) => (
-                <article key={impact.role}>
-                  <Badge variant={impact.variant}>{impact.role}</Badge>
-                  <p>{impact.description}</p>
-                </article>
-              ))}
-            </div>
-          </DraftSection>
-          <DraftSection number="7" title="후속 작업">
-            <div className="pull-request-review__follow-ups">
-              {followUps.map((item) => (
-                <button
-                  aria-label={`${item.label} ${item.completed ? "완료 해제" : "완료 처리"}`}
-                  aria-pressed={item.completed}
-                  key={item.id}
-                  onClick={() => onToggleFollowUp(item.id)}
-                  type="button"
-                >
-                  <span aria-hidden="true">{item.completed ? "☑" : "☐"}</span>
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </DraftSection>
-        </div>
-      </div>
-
-      <div className="pull-request-review__draft-bottom">
-        <aside className="pull-request-review__checks">
-          <h3>확인 필요 사항</h3>
-          <ul>{draft.checks.map((check) => <li key={check}>{check}</li>)}</ul>
-        </aside>
-        <aside className="pull-request-review__evidence">
-          <h3>분석 근거</h3>
-          <dl>
-            {draft.evidence.map((item) => (
-              <div key={item.label}><dt>{item.label}</dt><dd>{item.value}</dd></div>
-            ))}
-          </dl>
-        </aside>
-      </div>
-    </section>
-  );
-}
-
-function DraftSection({ number, title, children }: { number: string; title: string; children: React.ReactNode }) {
-  return (
-    <section className="pull-request-review__draft-section">
-      <h3>{number}. {title}</h3>
-      {children}
-    </section>
-  );
-}
-
-type ReviewStatePanelProps = {
-  state: Exclude<PullRequestReviewState, "review">;
-  projectId: string;
-  onAnalyze: () => void;
-  pullRequest?: PullRequestDetail;
-};
-
-function ReviewStatePanel({ state, projectId, onAnalyze, pullRequest }: ReviewStatePanelProps) {
-  const { analysisStages, approval, draft, failure } = pullRequestReviewMock;
-
-  if (state === "analyzing") {
-    return (
-      <section aria-labelledby="analysis-state-title" aria-live="polite" className="pull-request-review__state-panel" role="status">
-        <div aria-hidden="true" className="pull-request-review__state-icon pull-request-review__state-icon--progress">○</div>
-        <h2 id="analysis-state-title">AI가 PR을 분석하고 있어요</h2>
-        <p>PR 본문, 코드 diff와 프로젝트 정보를 함께 확인하고 있습니다.</p>
-        <ol className="pull-request-review__stages">
-          {analysisStages.map((stage) => (
-            <li className={stage.completed ? "pull-request-review__stage--complete" : ""} key={stage.label}>
-              <span aria-hidden="true">{stage.completed ? "✓" : "○"}</span>
-              {stage.label}
-            </li>
-          ))}
-        </ol>
-        <p className="pull-request-review__state-hint">분석 중에는 페이지를 나가도 작업이 계속됩니다.</p>
+      <section
+        aria-labelledby="analysis-summary-title"
+        className="pull-request-review__analysis-summary"
+      >
+        <h3 id="analysis-summary-title">작업 요약</h3>
+        <p>{analysisResult.summary || "요약 정보가 없습니다."}</p>
       </section>
-    );
-  }
 
-  if (state === "failed") {
-    return (
-      <section aria-labelledby="analysis-state-title" className="pull-request-review__state-panel" role="alert">
-        <div aria-hidden="true" className="pull-request-review__state-icon pull-request-review__state-icon--failed">!</div>
-        <h2 id="analysis-state-title">AI 분석에 실패했어요</h2>
-        <p>분석 중 오류가 발생했습니다. 원본 PR은 그대로 유지되며 다시 시도할 수 있습니다.</p>
-        <aside className="pull-request-review__failure-detail">
-          <strong>오류 코드 · {failure.code}</strong>
-          <span>{failure.description}</span>
-        </aside>
-        <div className="pull-request-review__state-actions">
-          <Button onClick={onAnalyze}>AI 재분석</Button>
-          {pullRequest ? (
-            <a
-              aria-label={`GitHub에서 Pull Request #${pullRequest.prNumber} 보기 (새 탭)`}
-              className="ui-button ui-button--secondary ui-button--md"
-              href={pullRequest.htmlUrl}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              GitHub에서 보기
-            </a>
+      <section aria-label="분석 인사이트" className="pull-request-review__analysis-insights">
+        <AnalysisInsightCard
+          count={analysisResult.impacts.length}
+          emptyText="영향 정보가 없습니다."
+          items={analysisResult.impacts}
+          title="영향"
+          variant="impact"
+        />
+        <AnalysisInsightCard
+          count={analysisResult.risks.length}
+          emptyText="식별된 리스크가 없습니다."
+          items={analysisResult.risks}
+          title="리스크"
+          variant="risk"
+        />
+        <AnalysisInsightCard
+          count={analysisResult.recommendations.length}
+          emptyText="권장 사항이 없습니다."
+          items={analysisResult.recommendations}
+          title="권장 사항"
+          variant="recommendation"
+        />
+      </section>
+
+      <section
+        aria-labelledby="analysis-changes-title"
+        className="pull-request-review__analysis-changes"
+      >
+        <div className="pull-request-review__analysis-section-heading">
+          <h3 id="analysis-changes-title">변경 파일</h3>
+          {analysisResult.changes.length > 0 ? (
+            <span className="pull-request-review__analysis-count">
+              {analysisResult.changes.length}개
+            </span>
           ) : null}
         </div>
+
+        {analysisResult.changes.length > 0 ? (
+          <>
+            <ul className="pull-request-review__analysis-change-list">
+              {visibleChanges.map((change) => (
+                <li key={`${change.filePath}-${change.description}`}>
+                  <code>{change.filePath}</code>
+                  <span>{change.description}</span>
+                </li>
+              ))}
+            </ul>
+            {hiddenChangeCount > 0 ? (
+              <div className="pull-request-review__analysis-change-controls">
+                {!showAllChanges ? (
+                  <Button onClick={() => setShowAllChanges(true)} size="sm" variant="secondary">
+                    전체 변경 파일 {analysisResult.changes.length}개 보기
+                  </Button>
+                ) : (
+                  <Button onClick={() => setShowAllChanges(false)} size="sm" variant="ghost">
+                    접기
+                  </Button>
+                )}
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <p className="pull-request-review__analysis-empty">변경 파일 정보가 없습니다.</p>
+        )}
       </section>
-    );
-  }
+
+      <section
+        aria-labelledby="analysis-follow-ups-title"
+        className="pull-request-review__analysis-follow-ups"
+      >
+        <h3 id="analysis-follow-ups-title">후속 작업</h3>
+        <p className="pull-request-review__analysis-follow-ups-note">
+          프로젝트 기록 승인 전 로컬 체크리스트입니다.
+        </p>
+        <div className="pull-request-review__follow-ups">
+          {followUps.map((item) => (
+            <button
+              aria-label={`${item.label} ${item.completed ? "완료 해제" : "완료 처리"}`}
+              aria-pressed={item.completed}
+              key={item.id}
+              onClick={() => onToggleFollowUp(item.id)}
+              type="button"
+            >
+              <span aria-hidden="true">{item.completed ? "☑" : "☐"}</span>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function AnalysisInsightCard({
+  count,
+  emptyText,
+  items,
+  title,
+  variant,
+}: {
+  count: number;
+  emptyText: string;
+  items: string[];
+  title: string;
+  variant: "impact" | "risk" | "recommendation";
+}) {
+  return (
+    <article className={`pull-request-review__insight-card pull-request-review__insight-card--${variant}`}>
+      <header className="pull-request-review__insight-card-header">
+        <h4>{title}</h4>
+        {count > 0 ? <Badge variant="neutral">{count}</Badge> : null}
+      </header>
+      {items.length > 0 ? (
+        <ul className="pull-request-review__insight-list">
+          {items.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      ) : (
+        <p className="pull-request-review__analysis-empty">{emptyText}</p>
+      )}
+    </article>
+  );
+}
+
+function AnalysisInProgressPanel({
+  analysisStatus,
+  actionPending,
+  onCancel,
+}: {
+  analysisStatus: AnalysisStatus;
+  actionPending: boolean;
+  onCancel: () => void;
+}) {
+  const statusLabel = analysisStatusCopy[analysisStatus].label;
+
+  return (
+    <section aria-labelledby="analysis-state-title" aria-live="polite" className="pull-request-review__state-panel" role="status">
+      <div aria-hidden="true" className="pull-request-review__state-icon pull-request-review__state-icon--progress">○</div>
+      <h2 id="analysis-state-title">AI가 PR을 분석하고 있어요</h2>
+      <p>PR 본문, 코드 diff와 프로젝트 정보를 함께 확인하고 있습니다.</p>
+      <p className="pull-request-review__state-status">현재 상태 · {statusLabel}</p>
+      <p className="pull-request-review__state-hint">분석 중에는 페이지를 나가도 작업이 계속됩니다.</p>
+      <div className="pull-request-review__state-actions">
+        <Button disabled={actionPending} onClick={onCancel} variant="secondary">
+          {actionPending ? "취소 요청 중..." : "분석 취소"}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function AnalysisFailedPanel({
+  actionPending,
+  errorMessage,
+  onRetry,
+  pullRequest,
+}: {
+  actionPending: boolean;
+  errorMessage?: string | null;
+  onRetry: () => void;
+  pullRequest?: PullRequestDetail;
+}) {
+  return (
+    <section aria-labelledby="analysis-state-title" className="pull-request-review__state-panel" role="alert">
+      <div aria-hidden="true" className="pull-request-review__state-icon pull-request-review__state-icon--failed">!</div>
+      <h2 id="analysis-state-title">AI 분석에 실패했어요</h2>
+      <p>분석 중 오류가 발생했습니다. 원본 PR은 그대로 유지되며 다시 시도할 수 있습니다.</p>
+      <aside className="pull-request-review__failure-detail">
+        <strong>오류 메시지</strong>
+        <span>{errorMessage?.trim() || "상세 오류 메시지가 제공되지 않았습니다."}</span>
+      </aside>
+      <div className="pull-request-review__state-actions">
+        <Button disabled={actionPending} onClick={onRetry}>
+          {actionPending ? "재시도 중..." : "AI 재분석"}
+        </Button>
+        {pullRequest ? (
+          <a
+            aria-label={`GitHub에서 Pull Request #${pullRequest.prNumber} 보기 (새 탭)`}
+            className="ui-button ui-button--secondary ui-button--md"
+            href={pullRequest.htmlUrl}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            GitHub에서 보기
+          </a>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function AnalysisCanceledPanel({
+  onAnalyze,
+  projectId,
+  pullRequest,
+}: {
+  onAnalyze: () => void;
+  projectId: string;
+  pullRequest?: PullRequestDetail;
+}) {
+  return (
+    <section aria-labelledby="analysis-state-title" className="pull-request-review__state-panel">
+      <div aria-hidden="true" className="pull-request-review__state-icon pull-request-review__state-icon--failed">×</div>
+      <h2 id="analysis-state-title">AI 분석이 취소되었습니다</h2>
+      <p>요청한 분석이 중단되었습니다. 필요하면 다시 분석을 시작할 수 있습니다.</p>
+      <div className="pull-request-review__state-actions">
+        <Button onClick={onAnalyze}>AI 재분석</Button>
+        <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
+          GitHub 작업 목록
+        </Link>
+        {pullRequest ? (
+          <a
+            aria-label={`GitHub에서 Pull Request #${pullRequest.prNumber} 보기 (새 탭)`}
+            className="ui-button ui-button--secondary ui-button--md"
+            href={pullRequest.htmlUrl}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            GitHub에서 보기
+          </a>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function ApprovedPanel({
+  analysisResult,
+  projectId,
+  pullRequest,
+}: {
+  analysisResult: AnalysisResult | null;
+  projectId: string;
+  pullRequest?: PullRequestDetail;
+}) {
+  const { approval } = pullRequestReviewMock;
 
   return (
     <section aria-labelledby="analysis-state-title" className="pull-request-review__state-panel">
@@ -774,9 +1253,11 @@ function ReviewStatePanel({ state, projectId, onAnalyze, pullRequest }: ReviewSt
       <h2 id="analysis-state-title">프로젝트 기록이 승인됐어요</h2>
       <p>검토한 내용이 공식 프로젝트 메모리에 저장되었습니다.</p>
       <article className="pull-request-review__approved-summary">
-        <h3>{pullRequest?.title ?? draft.summary}</h3>
+        <h3>{pullRequest?.title ?? analysisResult?.summary ?? "승인된 기록"}</h3>
         <p>승인자 · {approval.approver} · {approval.approvedAt}</p>
-        <p>영향 역할 · {draft.impacts.map((impact) => impact.role).join(" / ")}</p>
+        {analysisResult && analysisResult.impacts.length > 0 ? (
+          <p>영향 · {analysisResult.impacts.join(" / ")}</p>
+        ) : null}
       </article>
       <div className="pull-request-review__state-actions">
         <Link className="ui-button ui-button--primary ui-button--md" to={`/projects/${projectId}/records`}>
