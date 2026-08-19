@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getApiErrorMessage } from "../../shared/api/client";
+import { getCurrentUser } from "../../shared/api/session";
 import { ButtonGroup, PageContainer } from "../../shared/layouts";
 import { Button, FormField } from "../../shared/ui";
 import { TopBar } from "../workspace/components/TopBar";
@@ -17,6 +18,7 @@ import "./ProjectCreateScreen.css";
 
 export function ProjectCreateScreen() {
   const navigate = useNavigate();
+  const currentUser = getCurrentUser();
   const [values, setValues] = useState<ProjectCreateFormValues>(initialProjectCreateFormValues);
   const [errors, setErrors] = useState<ProjectCreateFormErrors>({});
   const [feedback, setFeedback] = useState("");
@@ -63,7 +65,11 @@ export function ProjectCreateScreen() {
 
   return (
     <main className="project-create">
-      <TopBar title="새 프로젝트" user="홍길동" />
+      <TopBar
+        title="새 프로젝트"
+        user={currentUser?.username}
+        userEmail={currentUser?.loginId}
+      />
       <PageContainer size="lg">
         <div className="project-create__content">
           <h1 className="project-create__visually-hidden">새 프로젝트</h1>
