@@ -34,7 +34,7 @@ import {
   ANALYSIS_APPROVED_COPY,
   canApproveAnalysisWhileEditing,
   canEnterAnalysisEditMode,
-  canRequestAnalysisWhileEditing,
+  canRequestAnalysisAction,
   canSaveAnalysisEditDraft,
   commitAnalysisEditDraft,
   createAnalysisEditDraft,
@@ -316,7 +316,10 @@ export function PullRequestReviewScreen() {
     && analysisStatus === "COMPLETED";
   const canRequestAnalysis = (
     !isPullRequestRoute || analysisRestoreState === "ready"
-  ) && canRequestAnalysisWhileEditing(isEditingResult);
+  ) && canRequestAnalysisAction({
+    isEditing: isEditingResult,
+    recordActionPending,
+  });
 
   useEffect(() => {
     setAnalysisRecord(null);
@@ -541,6 +544,8 @@ export function PullRequestReviewScreen() {
 
   const requestNewAnalysis = async (prNumber: number) => {
     if (analysisRequesting) return;
+    if (recordActionPending) return;
+    if (isEditingResult) return;
 
     setAnalysisRequesting(true);
     setFeedback("");
@@ -913,6 +918,7 @@ function ReviewHeader({
     || !canRequestAnalysis
     || isApprovedView
     || isEditingResult
+    || recordActionPending
     || (analysisStatus ? isActiveAnalysisStatus(analysisStatus) : false);
 
   return (

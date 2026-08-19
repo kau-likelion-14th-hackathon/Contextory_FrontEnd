@@ -115,8 +115,14 @@ export function canApproveAnalysisWhileEditing(isEditing: boolean) {
   return !isEditing;
 }
 
-export function canRequestAnalysisWhileEditing(isEditing: boolean) {
-  return !isEditing;
+export function canRequestAnalysisAction({
+  isEditing,
+  recordActionPending,
+}: {
+  isEditing: boolean;
+  recordActionPending: boolean;
+}) {
+  return !isEditing && !recordActionPending;
 }
 
 export function canSaveAnalysisEditDraft({

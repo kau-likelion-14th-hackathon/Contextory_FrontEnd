@@ -3,7 +3,7 @@ import {
   ANALYSIS_APPROVED_COPY,
   canApproveAnalysisWhileEditing,
   canEnterAnalysisEditMode,
-  canRequestAnalysisWhileEditing,
+  canRequestAnalysisAction,
   canSaveAnalysisEditDraft,
   commitAnalysisEditDraft,
   createAnalysisEditDraft,
@@ -170,9 +170,21 @@ describe("analysisEditDraft", () => {
     expect(canApproveAnalysisWhileEditing(true)).toBe(false);
   });
 
-  it("blocks AI reanalysis while editing", () => {
-    expect(canRequestAnalysisWhileEditing(false)).toBe(true);
-    expect(canRequestAnalysisWhileEditing(true)).toBe(false);
+  it("blocks AI reanalysis while editing or record action pending", () => {
+    expect(canRequestAnalysisAction({
+      isEditing: false,
+      recordActionPending: false,
+    })).toBe(true);
+
+    expect(canRequestAnalysisAction({
+      isEditing: true,
+      recordActionPending: false,
+    })).toBe(false);
+
+    expect(canRequestAnalysisAction({
+      isEditing: false,
+      recordActionPending: true,
+    })).toBe(false);
   });
 
   it("allows save only when edit draft is dirty", () => {
