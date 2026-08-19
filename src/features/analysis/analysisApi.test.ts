@@ -77,6 +77,28 @@ describe("Analysis API", () => {
     );
   });
 
+  it("lists analyses without prNumber when omitted", async () => {
+    const result = {
+      content: [analysisListItem()],
+      hasNext: false,
+      page: 0,
+      size: 5,
+      totalElements: 1,
+      totalPages: 1,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(apiResponse(result));
+    vi.stubGlobal("fetch", fetchMock);
+    const { getAnalyses } = await loadAnalysisApi();
+
+    await expect(getAnalyses("39", { page: 0, size: 5 })).resolves.toEqual(result);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.test/api/projects/39/analyses?page=0&size=5",
+      expect.objectContaining({ method: "GET" }),
+    );
+    const url = String(fetchMock.mock.calls[0]?.[0]);
+    expect(url).not.toContain("prNumber=");
+  });
+
   it("returns the latest analysis summary for a PR number", async () => {
     const summary = analysisListItem({
       analysisId: 15,
