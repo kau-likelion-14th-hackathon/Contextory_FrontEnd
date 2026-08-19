@@ -2,12 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../shared/api/client";
 import { PageContainer } from "../../shared/layouts";
-import { Badge, Button, EmptyState, ErrorState, LoadingState, Modal } from "../../shared/ui";
+import { Badge, Button, EmptyState, ErrorState, LoadingState } from "../../shared/ui";
 import {
   approveAnalysis,
   cancelAnalysis,
   canApproveAnalysisRecord,
-  canEditAnalysisRecord,
   getAnalysis,
   getAnalysisApiErrorCode,
   getLatestAnalysisByPrNumber,
@@ -32,8 +31,11 @@ import {
   type PullRequestFilesResponse,
 } from "../github/pullRequestApi";
 import {
+  ANALYSIS_APPROVED_COPY,
   canApproveAnalysisWhileEditing,
   canEnterAnalysisEditMode,
+  canRequestAnalysisWhileEditing,
+  canSaveAnalysisEditDraft,
   commitAnalysisEditDraft,
   createAnalysisEditDraft,
   withDraftStringField,
@@ -252,7 +254,6 @@ function AnalysisFeedback({
 
 export function PullRequestReviewScreen() {
   const { projectId = "", pullRequestId, analysisId } = useParams();
-  const [discardOpen, setDiscardOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [analysisRequesting, setAnalysisRequesting] = useState(false);
   const [analysisActionPending, setAnalysisActionPending] = useState(false);
@@ -302,13 +303,20 @@ export function PullRequestReviewScreen() {
     isEditing: isEditingResult,
     pending: recordActionPending,
   }) && Boolean(parsedAnalysisResult);
-  const canSaveRecord = canEditAnalysisRecord(analysisRecord?.recordStatus, recordActionPending)
-    && Boolean(validAnalysisId)
-    && Boolean(isEditingResult ? editDraft : parsedAnalysisResult);
+  const canSaveRecord = canSaveAnalysisEditDraft({
+    isEditing: isEditingResult,
+    original: parsedAnalysisResult,
+    draft: editDraft,
+    pending: recordActionPending,
+    recordStatus: analysisRecord?.recordStatus,
+  }) && Boolean(validAnalysisId);
   const canApproveRecord = canApproveAnalysisRecord(analysisRecord?.recordStatus, recordActionPending)
     && canApproveAnalysisWhileEditing(isEditingResult)
     && Boolean(validAnalysisId)
     && analysisStatus === "COMPLETED";
+  const canRequestAnalysis = (
+    !isPullRequestRoute || analysisRestoreState === "ready"
+  ) && canRequestAnalysisWhileEditing(isEditingResult);
 
   useEffect(() => {
     setAnalysisRecord(null);
@@ -713,11 +721,6 @@ export function PullRequestReviewScreen() {
     );
   };
 
-  const confirmDiscard = () => {
-    setDiscardOpen(false);
-    navigate(`/projects/${projectId}/github`);
-  };
-
   if (isAnalysisRoute) {
     if (!validAnalysisId || analysisLoadState !== "success") {
       return (
@@ -764,12 +767,12 @@ export function PullRequestReviewScreen() {
             analysisRequesting={analysisRequesting}
             analysisStatus={isAnalysisRoute ? analysis?.analysisStatus : undefined}
             canApprove={canApproveRecord}
-            canRequestAnalysis={!isPullRequestRoute || analysisRestoreState === "ready"}
+            canRequestAnalysis={canRequestAnalysis}
             isApprovedView={isApprovedView}
+            isEditingResult={isEditingResult}
             onAnalyze={startAnalysis}
             onApprove={() => void approveReview()}
             pullRequest={pullRequest}
-            projectId={projectId}
             recordActionPending={recordActionPending}
           />
 
@@ -829,13 +832,6 @@ export function PullRequestReviewScreen() {
           {showFooterActions ? (
             <footer className="pull-request-review__footer-actions">
               <div>
-                <Button
-                  disabled={recordActionPending || isEditingResult}
-                  onClick={() => setDiscardOpen(true)}
-                  variant="secondary"
-                >
-                  폐기
-                </Button>
                 {isEditingResult ? (
                   <Button
                     disabled={recordActionPending}
@@ -854,7 +850,7 @@ export function PullRequestReviewScreen() {
                   </Button>
                 )}
                 <Button
-                  disabled={!canSaveRecord || !isEditingResult}
+                  disabled={!canSaveRecord}
                   onClick={() => void saveDraft()}
                   variant="secondary"
                 >
@@ -877,40 +873,18 @@ export function PullRequestReviewScreen() {
           </p>
         </div>
       </PageContainer>
-
-      <Modal
-        description="현재 AI 분석 초안과 사람이 수정한 내용이 삭제됩니다. GitHub 원본 PR에는 영향을 주지 않습니다."
-        onClose={() => setDiscardOpen(false)}
-        open={discardOpen}
-        title="AI 분석 결과를 폐기할까요?"
-      >
-        <div className="pull-request-review__discard-dialog">
-          <aside>
-            <strong>폐기 후 되돌릴 수 없습니다.</strong>
-            <span>다시 분석하면 새로운 초안이 생성됩니다.</span>
-          </aside>
-          <div>
-            <Button onClick={() => setDiscardOpen(false)} variant="secondary">
-              취소
-            </Button>
-            <Button onClick={confirmDiscard} variant="danger">
-              분석 결과 폐기
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </main>
   );
 }
 
 type ReviewHeaderProps = {
-  projectId: string;
   analysisId?: string;
   analysisStatus?: AnalysisStatus;
   analysisRequesting: boolean;
   canRequestAnalysis?: boolean;
   canApprove?: boolean;
   isApprovedView: boolean;
+  isEditingResult?: boolean;
   pullRequest?: PullRequestDetail;
   onAnalyze: () => void;
   onApprove: () => void;
@@ -924,9 +898,9 @@ function ReviewHeader({
   canApprove = false,
   canRequestAnalysis = true,
   isApprovedView,
+  isEditingResult = false,
   onAnalyze,
   onApprove,
-  projectId,
   pullRequest,
   recordActionPending = false,
 }: ReviewHeaderProps) {
@@ -938,6 +912,7 @@ function ReviewHeader({
   const analyzeDisabled = analysisRequesting
     || !canRequestAnalysis
     || isApprovedView
+    || isEditingResult
     || (analysisStatus ? isActiveAnalysisStatus(analysisStatus) : false);
 
   return (
@@ -972,14 +947,7 @@ function ReviewHeader({
             GitHub에서 보기
           </a>
         ) : null}
-        {isApprovedView ? (
-          <Link
-            className="ui-button ui-button--secondary ui-button--sm"
-            to={`/projects/${projectId}/records`}
-          >
-            메모리 보기
-          </Link>
-        ) : analysisStatus === "FAILED" ? null : (
+        {isApprovedView || analysisStatus === "FAILED" ? null : (
           <Button
             disabled={analyzeDisabled || !pullRequest}
             onClick={onAnalyze}
@@ -2293,17 +2261,14 @@ function ApprovedPanel({
   return (
     <section aria-labelledby="analysis-state-title" className="pull-request-review__state-panel">
       <div aria-hidden="true" className="pull-request-review__state-icon pull-request-review__state-icon--approved">✓</div>
-      <h2 id="analysis-state-title">프로젝트 기록이 승인됐어요</h2>
-      <p>검토한 내용이 공식 프로젝트 메모리에 저장되었습니다.</p>
+      <h2 id="analysis-state-title">{ANALYSIS_APPROVED_COPY.title}</h2>
+      <p>{ANALYSIS_APPROVED_COPY.description}</p>
       <article className="pull-request-review__approved-summary">
         <h3>{pullRequest?.title ?? analysisResult?.summary ?? "승인된 기록"}</h3>
         {approvedAt ? <p>승인 · {formatPullRequestDate(approvedAt)}</p> : null}
         {roleSummary ? <p>영향 · {roleSummary}</p> : null}
       </article>
       <div className="pull-request-review__state-actions">
-        <Link className="ui-button ui-button--primary ui-button--md" to={`/projects/${projectId}/records`}>
-          프로젝트 메모리에서 보기
-        </Link>
         <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
           GitHub 작업 목록
         </Link>

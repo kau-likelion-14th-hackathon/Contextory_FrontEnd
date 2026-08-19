@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  ANALYSIS_APPROVED_COPY,
   canApproveAnalysisWhileEditing,
   canEnterAnalysisEditMode,
+  canRequestAnalysisWhileEditing,
+  canSaveAnalysisEditDraft,
   commitAnalysisEditDraft,
   createAnalysisEditDraft,
   isAnalysisEditDraftDirty,
@@ -165,6 +168,56 @@ describe("analysisEditDraft", () => {
   it("blocks approve while editing", () => {
     expect(canApproveAnalysisWhileEditing(false)).toBe(true);
     expect(canApproveAnalysisWhileEditing(true)).toBe(false);
+  });
+
+  it("blocks AI reanalysis while editing", () => {
+    expect(canRequestAnalysisWhileEditing(false)).toBe(true);
+    expect(canRequestAnalysisWhileEditing(true)).toBe(false);
+  });
+
+  it("allows save only when edit draft is dirty", () => {
+    const source = extendedSource();
+    const cleanDraft = createAnalysisEditDraft(source);
+    const dirtyDraft = withDraftStringField(cleanDraft, "summary", "변경됨");
+
+    expect(canSaveAnalysisEditDraft({
+      isEditing: true,
+      original: source,
+      draft: cleanDraft,
+      pending: false,
+      recordStatus: null,
+    })).toBe(false);
+
+    expect(canSaveAnalysisEditDraft({
+      isEditing: true,
+      original: source,
+      draft: dirtyDraft,
+      pending: false,
+      recordStatus: null,
+    })).toBe(true);
+
+    expect(canSaveAnalysisEditDraft({
+      isEditing: true,
+      original: source,
+      draft: dirtyDraft,
+      pending: true,
+      recordStatus: null,
+    })).toBe(false);
+
+    expect(canSaveAnalysisEditDraft({
+      isEditing: false,
+      original: source,
+      draft: dirtyDraft,
+      pending: false,
+      recordStatus: null,
+    })).toBe(false);
+  });
+
+  it("keeps approval copy free of memory registration wording", () => {
+    expect(ANALYSIS_APPROVED_COPY.title).toContain("승인");
+    expect(ANALYSIS_APPROVED_COPY.description).toContain("승인");
+    expect(ANALYSIS_APPROVED_COPY.description).not.toMatch(/메모리/);
+    expect(ANALYSIS_APPROVED_COPY.title).not.toMatch(/메모리/);
   });
 
   it("supports legacy field edits without dropping risks", () => {

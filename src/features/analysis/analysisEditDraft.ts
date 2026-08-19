@@ -115,6 +115,34 @@ export function canApproveAnalysisWhileEditing(isEditing: boolean) {
   return !isEditing;
 }
 
+export function canRequestAnalysisWhileEditing(isEditing: boolean) {
+  return !isEditing;
+}
+
+export function canSaveAnalysisEditDraft({
+  isEditing,
+  original,
+  draft,
+  pending,
+  recordStatus,
+}: {
+  isEditing: boolean;
+  original: AnalysisResult | null | undefined;
+  draft: AnalysisResult | null | undefined;
+  pending: boolean;
+  recordStatus?: AnalysisRecordStatus | null;
+}) {
+  if (!isEditing || pending || recordStatus === "APPROVED" || !original || !draft) {
+    return false;
+  }
+  return isAnalysisEditDraftDirty(original, draft);
+}
+
+export const ANALYSIS_APPROVED_COPY = {
+  title: "프로젝트 기록이 승인됐어요",
+  description: "검토한 내용이 프로젝트 기록으로 승인되었습니다.",
+} as const;
+
 export function withDraftStringField(
   draft: AnalysisResult,
   field: "summary" | "purpose" | "changeReason" | "before" | "after",
