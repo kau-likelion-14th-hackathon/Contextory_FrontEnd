@@ -64,7 +64,6 @@ type AnalysisRestoreState = "idle" | "loading" | "ready" | "error";
 type AnalysisRecordState = {
   recordStatus: AnalysisRecordStatus;
   recordId: number | null;
-  approvedByUsername: string | null;
   approvedAt: string | null;
 };
 
@@ -498,7 +497,6 @@ export function PullRequestReviewScreen() {
     setAnalysisRecord({
       recordStatus: response.recordStatus,
       recordId: typeof response.recordId === "number" ? response.recordId : null,
-      approvedByUsername: response.approvedBy?.username ?? null,
       approvedAt: response.approvedAt ?? null,
     });
 
@@ -725,7 +723,6 @@ export function PullRequestReviewScreen() {
             <ApprovedPanel
               analysisResult={parsedAnalysisResult}
               approvedAt={analysisRecord?.approvedAt}
-              approvedByUsername={analysisRecord?.approvedByUsername}
               projectId={projectId}
               pullRequest={pullRequest}
             />
@@ -1737,23 +1734,17 @@ function AnalysisCanceledPanel({
 function ApprovedPanel({
   analysisResult,
   approvedAt,
-  approvedByUsername,
   projectId,
   pullRequest,
 }: {
   analysisResult: AnalysisResult | null;
   approvedAt?: string | null;
-  approvedByUsername?: string | null;
   projectId: string;
   pullRequest?: PullRequestDetail;
 }) {
   const roleSummary = analysisResult?.affectedRoles.length
     ? analysisResult.affectedRoles.join(" / ")
     : analysisResult?.impacts.join(" / ");
-  const approvalMeta = [
-    approvedByUsername ? `승인자 · ${approvedByUsername}` : null,
-    approvedAt ? formatPullRequestDate(approvedAt) : null,
-  ].filter(Boolean).join(" · ");
 
   return (
     <section aria-labelledby="analysis-state-title" className="pull-request-review__state-panel">
@@ -1762,7 +1753,7 @@ function ApprovedPanel({
       <p>검토한 내용이 공식 프로젝트 메모리에 저장되었습니다.</p>
       <article className="pull-request-review__approved-summary">
         <h3>{pullRequest?.title ?? analysisResult?.summary ?? "승인된 기록"}</h3>
-        {approvalMeta ? <p>{approvalMeta}</p> : null}
+        {approvedAt ? <p>승인 · {formatPullRequestDate(approvedAt)}</p> : null}
         {roleSummary ? <p>영향 · {roleSummary}</p> : null}
       </article>
       <div className="pull-request-review__state-actions">

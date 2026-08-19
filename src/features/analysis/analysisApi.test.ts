@@ -586,7 +586,7 @@ describe("Analysis API", () => {
       approvedAt: null,
       approvedBy: null,
       createdAt: "2026-08-19T00:00:00Z",
-      editedBy: { userId: 1, username: "dev" },
+      editedBy: 1,
       memoryEnabled: false,
       memoryEnabledAt: null,
       memoryEnabledBy: null,
@@ -631,12 +631,12 @@ describe("Analysis API", () => {
       analysisId: 12,
       analysisResult: { summary: "approved" },
       approvedAt: "2026-08-19T02:00:00Z",
-      approvedBy: { userId: 2, username: "lead" },
+      approvedBy: 2,
       createdAt: "2026-08-19T00:00:00Z",
       editedBy: null,
       memoryEnabled: true,
       memoryEnabledAt: "2026-08-19T02:00:00Z",
-      memoryEnabledBy: { userId: 2, username: "lead" },
+      memoryEnabledBy: 2,
       prNumber: 128,
       projectId: 39,
       recordId: 90,
@@ -714,5 +714,52 @@ describe("Analysis API", () => {
     });
     expect(serializeAnalysisResultForApi(parsed!)).not.toHaveProperty("hasExtendedFields");
     expect(serializeAnalysisResultForApi(parsed!)).not.toHaveProperty("hasRisksField");
+  });
+
+  it("omits risks from extended serialize when risks field was absent", async () => {
+    const { parseAnalysisResult, serializeAnalysisResultForApi } = await loadAnalysisApi();
+    const parsed = parseAnalysisResult({
+      summary: "요약",
+      purpose: "목적",
+      relatedFeatures: [],
+      needsConfirmation: [],
+    });
+
+    expect(parsed?.hasExtendedFields).toBe(true);
+    expect(parsed?.hasRisksField).toBe(false);
+    expect(serializeAnalysisResultForApi(parsed!)).not.toHaveProperty("risks");
+  });
+
+  it("keeps empty risks array in extended serialize when risks field existed", async () => {
+    const { parseAnalysisResult, serializeAnalysisResultForApi } = await loadAnalysisApi();
+    const parsed = parseAnalysisResult({
+      summary: "요약",
+      purpose: "목적",
+      relatedFeatures: [],
+      risks: [],
+    });
+
+    expect(parsed?.hasRisksField).toBe(true);
+    expect(serializeAnalysisResultForApi(parsed!)).toMatchObject({ risks: [] });
+  });
+
+  it("keeps risks in legacy serialize for backward compatibility", async () => {
+    const { parseAnalysisResult, serializeAnalysisResultForApi } = await loadAnalysisApi();
+    const parsed = parseAnalysisResult({
+      summary: "legacy",
+      changes: [],
+      impacts: ["frontend"],
+      risks: ["regression"],
+      recommendations: [],
+    });
+
+    expect(parsed?.hasExtendedFields).toBe(false);
+    expect(serializeAnalysisResultForApi(parsed!)).toEqual({
+      summary: "legacy",
+      changes: [],
+      impacts: ["frontend"],
+      risks: ["regression"],
+      recommendations: [],
+    });
   });
 });

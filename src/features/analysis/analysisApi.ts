@@ -44,11 +44,6 @@ export type AnalysisCancelResponse = {
 
 export type AnalysisRecordStatus = "DRAFT" | "APPROVED" | string;
 
-export type AnalysisRecordUser = {
-  userId: number;
-  username: string;
-};
-
 export type AnalysisRecordResponse = {
   recordId: number;
   projectId: number;
@@ -56,11 +51,11 @@ export type AnalysisRecordResponse = {
   prNumber: number;
   recordStatus: AnalysisRecordStatus;
   analysisResult: unknown | null;
-  editedBy: AnalysisRecordUser | null;
-  approvedBy: AnalysisRecordUser | null;
+  editedBy: number | null;
+  approvedBy: number | null;
   approvedAt: string | null;
   memoryEnabled: boolean;
-  memoryEnabledBy: AnalysisRecordUser | null;
+  memoryEnabledBy: number | null;
   memoryEnabledAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -355,36 +350,46 @@ export function canApproveAnalysisRecord(
 
 /** FE 전용 메타를 제외한 분석 결과 페이로드를 PATCH body용으로 만든다. */
 export function serializeAnalysisResultForApi(result: AnalysisResult): Record<string, unknown> {
+  if (!result.hasExtendedFields) {
+    return {
+      summary: result.summary,
+      changes: result.changes,
+      impacts: result.impacts,
+      risks: result.risks,
+      recommendations: result.recommendations,
+    };
+  }
+
   const payload: Record<string, unknown> = {
     summary: result.summary,
     changes: result.changes,
     impacts: result.impacts,
-    risks: result.risks,
     recommendations: result.recommendations,
+    purpose: result.purpose,
+    changeReason: result.changeReason,
+    before: result.before,
+    after: result.after,
+    relatedFeatures: result.relatedFeatures,
+    affectedRoles: result.affectedRoles,
+    roleImpacts: result.roleImpacts,
+    followUpTasks: result.followUpTasks,
+    needsConfirmation: result.needsConfirmation,
+    evidence: result.evidence.map((item) => {
+      const evidence: Record<string, unknown> = {
+        id: item.id,
+        source: item.source,
+        location: item.location,
+        description: item.description,
+      };
+      if (item.chunkId !== undefined) evidence.chunkId = item.chunkId;
+      if (item.similarityScore !== undefined) evidence.similarityScore = item.similarityScore;
+      return evidence;
+    }),
   };
 
-  if (!result.hasExtendedFields) return payload;
-
-  payload.purpose = result.purpose;
-  payload.changeReason = result.changeReason;
-  payload.before = result.before;
-  payload.after = result.after;
-  payload.relatedFeatures = result.relatedFeatures;
-  payload.affectedRoles = result.affectedRoles;
-  payload.roleImpacts = result.roleImpacts;
-  payload.followUpTasks = result.followUpTasks;
-  payload.needsConfirmation = result.needsConfirmation;
-  payload.evidence = result.evidence.map((item) => {
-    const evidence: Record<string, unknown> = {
-      id: item.id,
-      source: item.source,
-      location: item.location,
-      description: item.description,
-    };
-    if (item.chunkId !== undefined) evidence.chunkId = item.chunkId;
-    if (item.similarityScore !== undefined) evidence.similarityScore = item.similarityScore;
-    return evidence;
-  });
+  if (result.hasRisksField) {
+    payload.risks = result.risks;
+  }
 
   if (result.confidence !== undefined) payload.confidence = result.confidence;
   if (result.retrievalQualityWarning) payload.retrievalQualityWarning = true;
