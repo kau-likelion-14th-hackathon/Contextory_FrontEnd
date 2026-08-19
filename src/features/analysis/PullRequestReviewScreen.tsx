@@ -41,6 +41,7 @@ import {
   withDraftStringField,
   withDraftStringList,
 } from "./analysisEditDraft";
+import { PullRequestBodyMarkdown } from "./PullRequestBodyMarkdown";
 import "./PullRequestReviewScreen.css";
 
 const POLLING_INTERVAL_MS = 2000;
@@ -1097,7 +1098,7 @@ function GitHubSourcePanel({
 
       <div className="pull-request-review__summary">
         <h2>PR 설명</h2>
-        <p>{pullRequest.body?.trim() || "PR 설명이 없습니다."}</p>
+        <PullRequestBodyMarkdown body={pullRequest.body} />
       </div>
 
       <section className="pull-request-review__files" aria-labelledby="changed-files-title">
