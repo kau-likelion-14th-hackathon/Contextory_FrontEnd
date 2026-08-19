@@ -1,55 +1,175 @@
-import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useOutletContext, useParams } from "react-router-dom";
+import { getApiErrorMessage } from "../../shared/api/client";
 import { PageContainer, ResponsiveGrid } from "../../shared/layouts";
-import { Badge, Button, EmptyState, ErrorState, LoadingState } from "../../shared/ui";
-import { KpiCard } from "./components";
+import { Badge, EmptyState, ErrorState, LoadingState } from "../../shared/ui";
 import {
-  DEFAULT_PROJECT_HOME_ROLE,
-  DEFAULT_PROJECT_HOME_STATE,
-  projectHomeActivityMock,
-  projectHomeMockByRole,
-  projectHomePlanMock,
-  projectHomeTrialMock,
-  type ProjectHomeRole,
-  type ProjectHomeViewState,
-} from "./projectHomeMock";
+  getAnalyses,
+  getAnalysisApiErrorCode,
+  type AnalysisListResponse,
+  type AnalysisStatus,
+  type AnalysisSummary,
+} from "../analysis/analysisApi";
+import {
+  getPullRequestApiErrorCode,
+  getPullRequests,
+  type PullRequestListResponse,
+  type PullRequestSummary,
+} from "../github/pullRequestApi";
+import type { ProjectWorkspaceContextValue } from "../workspace/WorkspaceShell";
+import { KpiCard } from "./components";
 import "./ProjectHomeScreen.css";
 
-const viewStates: ProjectHomeViewState[] = ["loading", "empty", "error", "success"];
+const HOME_LIST_SIZE = 5;
 
-function isProjectHomeRole(value: string | null): value is ProjectHomeRole {
-  return value === "admin" || value === "member";
+const ANALYSIS_STATUS_COPY: Record<
+  AnalysisStatus,
+  { label: string; variant: "warning" | "info" | "danger" | "success" }
+> = {
+  PENDING: { label: "분석 대기", variant: "warning" },
+  PROCESSING: { label: "분석 중", variant: "info" },
+  COMPLETED: { label: "분석 완료", variant: "success" },
+  FAILED: { label: "분석 실패", variant: "danger" },
+  CANCELED: { label: "분석 취소", variant: "warning" },
+};
+
+const PERMISSION_ROLE_LABELS: Record<string, string> = {
+  OWNER: "소유자",
+  ADMIN: "관리자",
+  MEMBER: "멤버",
+  VIEWER: "뷰어",
+};
+
+type HomeLoadState = "loading" | "success" | "error";
+
+function formatPermissionRole(role?: string | null) {
+  if (!role?.trim()) return "—";
+  const normalized = role.trim().toUpperCase();
+  return PERMISSION_ROLE_LABELS[normalized] ?? role;
 }
 
-function isProjectHomeViewState(value: string | null): value is ProjectHomeViewState {
-  return value !== null && viewStates.includes(value as ProjectHomeViewState);
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value || "—";
+  return new Intl.DateTimeFormat("ko-KR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function getAnalysisStatusCopy(status: string) {
+  return ANALYSIS_STATUS_COPY[status as AnalysisStatus]
+    ?? { label: status || "상태 미확인", variant: "info" as const };
+}
+
+function getPullRequestStatus(pullRequest: PullRequestSummary) {
+  const state = pullRequest.state.toLowerCase() === "open" ? "열림" : "닫힘";
+  return pullRequest.draft ? `Draft · ${state}` : state;
+}
+
+function describeRepository(connected: boolean, fullName?: string | null) {
+  if (!connected) return { value: "미연결", description: "GitHub 저장소가 연결되어 있지 않습니다." };
+  const name = fullName?.trim();
+  return {
+    value: "연결됨",
+    description: name || "저장소 이름을 확인할 수 없습니다.",
+  };
 }
 
 export function ProjectHomeScreen() {
-  const [searchParams] = useSearchParams();
-  const roleParam = searchParams.get("role");
-  const stateParam = searchParams.get("state");
-  const role = isProjectHomeRole(roleParam) ? roleParam : DEFAULT_PROJECT_HOME_ROLE;
-  const viewState = isProjectHomeViewState(stateParam) ? stateParam : DEFAULT_PROJECT_HOME_STATE;
-  const data = projectHomeMockByRole[role];
-  const [followUps, setFollowUps] = useState(data.followUps);
-  const [feedback, setFeedback] = useState({ message: "", revision: 0 });
+  const { projectId = "" } = useParams();
+  const { project } = useOutletContext<ProjectWorkspaceContextValue>();
+  const [loadState, setLoadState] = useState<HomeLoadState>("loading");
+  const [retryKey, setRetryKey] = useState(0);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [analyses, setAnalyses] = useState<AnalysisListResponse>();
+  const [pullRequests, setPullRequests] = useState<PullRequestListResponse>();
+  const [analysesError, setAnalysesError] = useState("");
+  const [pullRequestsError, setPullRequestsError] = useState("");
 
   useEffect(() => {
-    setFollowUps(data.followUps);
-  }, [data.followUps]);
+    if (!projectId) return;
 
-  const toggleFollowUp = (id: string) => {
-    setFollowUps((items) =>
-      items.map((item) =>
-        item.id === id ? { ...item, completed: !item.completed } : item,
-      ),
-    );
-  };
+    const controller = new AbortController();
+    setLoadState("loading");
+    setErrorMessage("");
+    setAnalysesError("");
+    setPullRequestsError("");
 
-  const announceFeedback = (message: string) => {
-    setFeedback((current) => ({ message, revision: current.revision + 1 }));
-  };
+    void (async () => {
+      const [analysesResult, pullRequestsResult] = await Promise.all([
+        getAnalyses(projectId, { page: 0, size: HOME_LIST_SIZE }, controller.signal)
+          .then((response) => ({ ok: true as const, response }))
+          .catch((error: unknown) => ({ ok: false as const, error })),
+        getPullRequests(
+          projectId,
+          { state: "ALL", page: 1, size: HOME_LIST_SIZE },
+          controller.signal,
+        )
+          .then((response) => ({ ok: true as const, response }))
+          .catch((error: unknown) => ({ ok: false as const, error })),
+      ]);
+
+      if (controller.signal.aborted) return;
+
+      if (analysesResult.ok) {
+        setAnalyses(analysesResult.response);
+        setAnalysesError("");
+      } else {
+        setAnalyses(undefined);
+        setAnalysesError(
+          getApiErrorMessage(analysesResult.error, "AI 분석 목록을 불러오지 못했습니다."),
+        );
+      }
+
+      if (pullRequestsResult.ok) {
+        setPullRequests(pullRequestsResult.response);
+        setPullRequestsError("");
+      } else {
+        setPullRequests(undefined);
+        const code = getPullRequestApiErrorCode(pullRequestsResult.error);
+        if (code === "PROJECT_REPOSITORY_4041") {
+          setPullRequestsError("연결된 GitHub 저장소가 없습니다.");
+        } else if (["GITHUB_4011", "GITHUB_4012", "GITHUB_4013"].includes(code ?? "")) {
+          setPullRequestsError("GitHub 연결이 필요합니다.");
+        } else {
+          setPullRequestsError(
+            getApiErrorMessage(pullRequestsResult.error, "Pull Request 목록을 불러오지 못했습니다."),
+          );
+        }
+      }
+
+      if (!analysesResult.ok && !pullRequestsResult.ok) {
+        const analysisCode = getAnalysisApiErrorCode(analysesResult.error);
+        setErrorMessage(
+          analysisCode
+            ? getApiErrorMessage(analysesResult.error, "프로젝트 홈을 불러오지 못했습니다.")
+            : getApiErrorMessage(
+              pullRequestsResult.error,
+              "프로젝트 홈을 불러오지 못했습니다.",
+            ),
+        );
+        setLoadState("error");
+        return;
+      }
+
+      setLoadState("success");
+    })();
+
+    return () => controller.abort();
+  }, [projectId, retryKey]);
+
+  const repositoryConnected = Boolean(project?.repository?.connected);
+  const repositoryFullName = project?.repository?.repositoryFullName ?? null;
+  const repositoryKpi = describeRepository(repositoryConnected, repositoryFullName);
+  const latestAnalysis = analyses?.content[0];
+  const latestAnalysisStatus = latestAnalysis
+    ? getAnalysisStatusCopy(latestAnalysis.analysisStatus)
+    : null;
+  const description = [
+    project?.summary?.trim(),
+    project?.purpose?.trim(),
+  ].filter(Boolean).join(" · ") || "프로젝트 요약 정보가 없습니다.";
 
   return (
     <main className="project-home">
@@ -57,150 +177,187 @@ export function ProjectHomeScreen() {
         <div className="project-home__content">
           <header className="project-home__header">
             <div className="project-home__heading">
-              <h1>{data.title}</h1>
-              <p>{data.description}</p>
+              <h1>{project?.name ?? "프로젝트"}</h1>
+              <p>{description}</p>
             </div>
-            <aside className="project-home__trial" aria-label="무료 체험 안내">
+            <aside className="project-home__repo" aria-label="GitHub 저장소 연결 상태">
               <div>
-                <strong>{projectHomeTrialMock.title}</strong>
-                <span>{projectHomeTrialMock.description}</span>
+                <strong>{repositoryConnected ? "저장소 연결됨" : "저장소 미연결"}</strong>
+                <span>{repositoryFullName?.trim() || "설정에서 GitHub 저장소를 연결하세요."}</span>
               </div>
               <Link
-                aria-label="프로젝트 플랜 변경"
                 className="ui-button ui-button--secondary ui-button--sm"
-                to="../settings?tab=billing"
+                to={repositoryConnected ? "../github" : "../settings"}
               >
-                플랜 변경
+                {repositoryConnected ? "GitHub 작업" : "설정으로 이동"}
               </Link>
             </aside>
           </header>
-          <p aria-atomic="true" aria-live="polite" className="project-home__feedback">
-            {feedback.message ? <span key={feedback.revision}>{feedback.message}</span> : null}
-          </p>
 
-          {viewState === "loading" ? (
-            <LoadingState title="프로젝트 홈을 불러오는 중입니다" description="최근 프로젝트 변경과 후속 작업을 확인하고 있습니다." />
-          ) : null}
-          {viewState === "empty" ? (
-            <EmptyState title="표시할 프로젝트 활동이 없습니다" description="새로운 변경이나 프로젝트 기록이 수집되면 이곳에서 확인할 수 있습니다." />
-          ) : null}
-          {viewState === "error" ? (
-            <ErrorState
-              title="프로젝트 홈을 불러오지 못했습니다"
-              description="잠시 후 다시 시도해주세요. 현재 화면은 개발용 mock 상태입니다."
-              action={{ label: "다시 시도", onClick: () => undefined }}
+          {loadState === "loading" ? (
+            <LoadingState
+              description="최근 AI 분석과 Pull Request를 확인하고 있습니다."
+              title="프로젝트 홈을 불러오는 중입니다"
             />
           ) : null}
 
-          {viewState === "success" ? (
+          {loadState === "error" ? (
+            <ErrorState
+              action={{ label: "다시 시도", onClick: () => setRetryKey((key) => key + 1) }}
+              description={errorMessage || "잠시 후 다시 시도해주세요."}
+              title="프로젝트 홈을 불러오지 못했습니다"
+            />
+          ) : null}
+
+          {loadState === "success" ? (
             <div className="project-home__sections">
               <section aria-labelledby="project-home-kpis">
                 <h2 className="project-home__visually-hidden" id="project-home-kpis">프로젝트 요약</h2>
                 <ResponsiveGrid desktopColumns={4} tabletColumns={2}>
-                  {data.kpis.map((kpi) => <KpiCard key={kpi.label} {...kpi} />)}
+                  <KpiCard
+                    description={analyses ? "프로젝트 전체 AI 분석 수" : (analysesError || "분석 수를 확인할 수 없습니다.")}
+                    label="전체 AI 분석"
+                    value={analyses ? analyses.totalElements : "—"}
+                  />
+                  <KpiCard
+                    description={
+                      latestAnalysis
+                        ? `PR #${latestAnalysis.prNumber}`
+                        : (analysesError || "아직 분석 기록이 없습니다.")
+                    }
+                    label="최신 분석 상태"
+                    value={latestAnalysisStatus?.label ?? "—"}
+                  />
+                  <KpiCard
+                    description={repositoryKpi.description}
+                    label="GitHub 저장소"
+                    value={repositoryKpi.value}
+                  />
+                  <KpiCard
+                    description="현재 프로젝트에서의 내 권한"
+                    label="내 프로젝트 권한"
+                    value={formatPermissionRole(project?.myPermissionRole)}
+                  />
                 </ResponsiveGrid>
               </section>
 
               <div className="project-home__columns">
-                <section className="project-home__panel project-home__updates" aria-labelledby="project-updates-title">
+                <section className="project-home__panel" aria-labelledby="recent-analyses-title">
                   <div className="project-home__panel-header">
-                    <h2 id="project-updates-title">{data.updateSectionTitle}</h2>
-                    <Link className="ui-button ui-button--secondary ui-button--sm" to="../records">
-                      모든 변경 보기
+                    <h2 id="recent-analyses-title">최근 AI 분석</h2>
+                    <Link className="ui-button ui-button--secondary ui-button--sm" to="../github">
+                      GitHub에서 분석
                     </Link>
                   </div>
-                  <div className="project-home__update-list">
-                    {data.updates.map((update) => (
-                      <article className="project-home__update" key={update.id}>
-                        <div className="project-home__update-badge">
-                          <Badge variant={update.badgeVariant}>{update.badge}</Badge>
-                        </div>
-                        <div className="project-home__update-copy">
-                          <h3>{update.title}</h3>
-                          <p>{update.summary}</p>
-                        </div>
-                        <time>{update.createdAt}</time>
-                      </article>
-                    ))}
-                  </div>
+                  <HomeListBody
+                    emptyDescription="AI 분석을 요청하면 최근 결과가 여기에 표시됩니다."
+                    emptyTitle="최근 AI 분석이 없습니다"
+                    errorMessage={analysesError}
+                    items={analyses?.content}
+                    renderItem={(item) => (
+                      <AnalysisListItem analysis={item} key={item.analysisId} />
+                    )}
+                  />
                 </section>
 
-                <div className="project-home__right-column">
-                  <section className="project-home__panel project-home__tasks" aria-labelledby="follow-up-title">
-                    <div className="project-home__panel-header">
-                      <h2 id="follow-up-title">{data.taskSectionTitle}</h2>
-                      <Button
-                        onClick={() => announceFeedback("후속 작업 전체 보기 기능은 아직 연결되지 않았습니다.")}
-                        size="sm"
-                        variant="secondary"
-                      >
-                        전체 보기
-                      </Button>
-                    </div>
-                    <div className="project-home__task-list">
-                      {followUps.map((item) => (
-                        <article className="project-home__task" key={item.id}>
-                          <Button
-                            aria-label={`${item.content} ${item.completed ? "완료 해제" : "완료 처리"}`}
-                            aria-pressed={item.completed}
-                            className="project-home__task-check"
-                            onClick={() => toggleFollowUp(item.id)}
-                            size="sm"
-                            variant="ghost"
-                          >
-                            {item.completed ? "✓" : "□"}
-                          </Button>
-                          <div className="project-home__task-copy">
-                            <h3>{item.content}</h3>
-                            <p>{item.targetRole} · {item.assignee}</p>
-                          </div>
-                          <Badge variant={item.completed ? "success" : item.priorityVariant}>
-                            {item.completed ? "완료" : item.priority}
-                          </Badge>
-                          <time>{item.due}</time>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-
-                  <div className="project-home__bottom-cards">
-                    <section className="project-home__compact-card" aria-labelledby="plan-credit-title">
-                      <h2 id="plan-credit-title">플랜 및 크레딧</h2>
-                      <Badge variant="success">{projectHomePlanMock.name}</Badge>
-                      <strong>{projectHomePlanMock.used} / {projectHomePlanMock.total}</strong>
-                      <div
-                        aria-label={`크레딧 ${projectHomePlanMock.usagePercent}% 사용`}
-                        aria-valuemax={100}
-                        aria-valuemin={0}
-                        aria-valuenow={projectHomePlanMock.usagePercent}
-                        className="project-home__progress"
-                        role="progressbar"
-                      >
-                        <span style={{ width: `${projectHomePlanMock.usagePercent}%` }} />
-                      </div>
-                      <Link
-                        className="ui-button ui-button--primary ui-button--sm project-home__billing-link"
-                        to="../settings?tab=billing"
-                      >
-                        결제 및 플랜 관리
-                      </Link>
-                    </section>
-
-                    <section className="project-home__compact-card" aria-labelledby="recent-activity-title">
-                      <h2 id="recent-activity-title">최근 활동</h2>
-                      <ul className="project-home__activity-list">
-                        {projectHomeActivityMock.map((activity) => (
-                          <li key={activity}><span aria-hidden="true" />{activity}</li>
-                        ))}
-                      </ul>
-                    </section>
+                <section className="project-home__panel" aria-labelledby="recent-prs-title">
+                  <div className="project-home__panel-header">
+                    <h2 id="recent-prs-title">최근 Pull Request</h2>
+                    <Link className="ui-button ui-button--secondary ui-button--sm" to="../github">
+                      전체 보기
+                    </Link>
                   </div>
-                </div>
+                  <HomeListBody
+                    emptyDescription="연결된 저장소의 Pull Request가 여기에 표시됩니다."
+                    emptyTitle="최근 Pull Request가 없습니다"
+                    errorMessage={pullRequestsError}
+                    items={pullRequests?.content}
+                    renderItem={(item) => (
+                      <PullRequestListItem key={item.prNumber} pullRequest={item} />
+                    )}
+                  />
+                </section>
               </div>
             </div>
           ) : null}
         </div>
       </PageContainer>
     </main>
+  );
+}
+
+function HomeListBody<T>({
+  emptyDescription,
+  emptyTitle,
+  errorMessage,
+  items,
+  renderItem,
+}: {
+  emptyDescription: string;
+  emptyTitle: string;
+  errorMessage: string;
+  items?: T[];
+  renderItem: (item: T) => ReactNode;
+}) {
+  if (errorMessage) {
+    return (
+      <div className="project-home__section-state">
+        <ErrorState description={errorMessage} title="목록을 불러오지 못했습니다" />
+      </div>
+    );
+  }
+
+  if (!items || items.length === 0) {
+    return (
+      <div className="project-home__section-state">
+        <EmptyState description={emptyDescription} title={emptyTitle} />
+      </div>
+    );
+  }
+
+  return <div className="project-home__list">{items.map(renderItem)}</div>;
+}
+
+function AnalysisListItem({ analysis }: { analysis: AnalysisSummary }) {
+  const status = getAnalysisStatusCopy(analysis.analysisStatus);
+
+  return (
+    <Link className="project-home__list-item" to={`../analyses/${analysis.analysisId}`}>
+      <div className="project-home__list-badge">
+        <Badge variant={status.variant}>{status.label}</Badge>
+      </div>
+      <div className="project-home__list-copy">
+        <h3>PR #{analysis.prNumber} 분석</h3>
+        <p>
+          {analysis.modelName?.trim() || "모델 정보 없음"}
+          {" · "}
+          요청 {formatDateTime(analysis.requestedAt)}
+        </p>
+      </div>
+      <time dateTime={analysis.completedAt ?? analysis.requestedAt}>
+        {formatDateTime(analysis.completedAt ?? analysis.requestedAt)}
+      </time>
+    </Link>
+  );
+}
+
+function PullRequestListItem({ pullRequest }: { pullRequest: PullRequestSummary }) {
+  return (
+    <Link className="project-home__list-item" to={`../github/pulls/${pullRequest.prNumber}`}>
+      <div className="project-home__list-badge">
+        <Badge variant={pullRequest.state.toLowerCase() === "open" ? "success" : "info"}>
+          {getPullRequestStatus(pullRequest)}
+        </Badge>
+      </div>
+      <div className="project-home__list-copy">
+        <h3>#{pullRequest.prNumber} {pullRequest.title}</h3>
+        <p>
+          {pullRequest.authorLogin ?? "작성자 미상"}
+          {" · "}
+          {pullRequest.sourceBranch ?? "—"} → {pullRequest.targetBranch ?? "—"}
+        </p>
+      </div>
+      <time dateTime={pullRequest.updatedAt}>{formatDateTime(pullRequest.updatedAt)}</time>
+    </Link>
   );
 }

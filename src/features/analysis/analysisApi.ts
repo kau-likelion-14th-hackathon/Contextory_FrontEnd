@@ -91,7 +91,7 @@ export type AnalysisListResponse = {
 };
 
 export type GetAnalysesParams = {
-  prNumber: number;
+  prNumber?: number;
   page?: number;
   size?: number;
 };
@@ -503,11 +503,12 @@ export function getAnalyses(
   { prNumber, page = 0, size = 1 }: GetAnalysesParams,
   signal?: AbortSignal,
 ) {
-  const searchParams = new URLSearchParams({
-    prNumber: String(prNumber),
-    page: String(page),
-    size: String(size),
-  });
+  const searchParams = new URLSearchParams();
+  if (prNumber !== undefined) {
+    searchParams.set("prNumber", String(prNumber));
+  }
+  searchParams.set("page", String(page));
+  searchParams.set("size", String(size));
 
   return requestApiResult<AnalysisListResponse>(
     `/api/projects/${encodeURIComponent(projectId)}/analyses?${searchParams}`,
