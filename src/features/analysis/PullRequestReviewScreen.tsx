@@ -29,6 +29,7 @@ import {
 import "./PullRequestReviewScreen.css";
 
 const POLLING_INTERVAL_MS = 2000;
+const DEFAULT_VISIBLE_ANALYSIS_CHANGES = 8;
 
 const analysisStatusCopy: Record<
   AnalysisStatus,
@@ -305,7 +306,7 @@ export function PullRequestReviewScreen() {
     }
 
     let cancelled = false;
-    let pollTimer: ReturnType<typeof setTimeout> | undefined;
+    let pollTimer: number | undefined;
     let requestController: AbortController | undefined;
     let requestGeneration = 0;
 
@@ -978,94 +979,158 @@ function AnalysisResultPanel({
   onToggleFollowUp,
 }: ReviewWorkspaceProps & { analysisResult: AnalysisResult }) {
   const { draft } = pullRequestReviewMock;
+  const [showAllChanges, setShowAllChanges] = useState(false);
+  const hiddenChangeCount = Math.max(
+    analysisResult.changes.length - DEFAULT_VISIBLE_ANALYSIS_CHANGES,
+    0,
+  );
+  const visibleChanges = showAllChanges || hiddenChangeCount === 0
+    ? analysisResult.changes
+    : analysisResult.changes.slice(0, DEFAULT_VISIBLE_ANALYSIS_CHANGES);
 
   return (
-    <section className="pull-request-review__panel pull-request-review__draft" aria-labelledby="draft-title">
-      <header>
-        <h2 id="draft-title">프로젝트 기록 초안 (AI 분석 결과)</h2>
-        <Badge variant="success">{draft.version}</Badge>
+    <section
+      aria-labelledby="analysis-result-title"
+      className="pull-request-review__panel pull-request-review__draft pull-request-review__analysis-result"
+    >
+      <header className="pull-request-review__analysis-header">
+        <div>
+          <h2 id="analysis-result-title">AI 분석 결과</h2>
+          <div className="pull-request-review__analysis-header-meta">
+            <Badge variant="success">분석 완료</Badge>
+            <Badge variant="info">{draft.recordType}</Badge>
+          </div>
+        </div>
       </header>
 
-      <div className="pull-request-review__draft-grid">
-        <div className="pull-request-review__draft-column">
-          <DraftSection number="1" title="기록 유형">
-            <Badge variant="info">{draft.recordType}</Badge>
-          </DraftSection>
-          <DraftSection number="2" title="작업 요약">
-            <p>{analysisResult.summary || "요약 정보가 없습니다."}</p>
-          </DraftSection>
-          <DraftSection number="3" title="변경 파일">
-            {analysisResult.changes.length > 0 ? (
-              <ul className="pull-request-review__change-list">
-                {analysisResult.changes.map((change) => (
-                  <li key={`${change.filePath}-${change.description}`}>
-                    <code>{change.filePath}</code>
-                    <span>{change.description}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>변경 파일 정보가 없습니다.</p>
-            )}
-          </DraftSection>
-          <DraftSection number="4" title="리스크">
-            {analysisResult.risks.length > 0 ? (
-              <ul className="pull-request-review__bullet-list">
-                {analysisResult.risks.map((risk) => <li key={risk}>{risk}</li>)}
-              </ul>
-            ) : (
-              <p>식별된 리스크가 없습니다.</p>
-            )}
-          </DraftSection>
+      <section
+        aria-labelledby="analysis-summary-title"
+        className="pull-request-review__analysis-summary"
+      >
+        <h3 id="analysis-summary-title">작업 요약</h3>
+        <p>{analysisResult.summary || "요약 정보가 없습니다."}</p>
+      </section>
+
+      <section aria-label="분석 인사이트" className="pull-request-review__analysis-insights">
+        <AnalysisInsightCard
+          count={analysisResult.impacts.length}
+          emptyText="영향 정보가 없습니다."
+          items={analysisResult.impacts}
+          title="영향"
+          variant="impact"
+        />
+        <AnalysisInsightCard
+          count={analysisResult.risks.length}
+          emptyText="식별된 리스크가 없습니다."
+          items={analysisResult.risks}
+          title="리스크"
+          variant="risk"
+        />
+        <AnalysisInsightCard
+          count={analysisResult.recommendations.length}
+          emptyText="권장 사항이 없습니다."
+          items={analysisResult.recommendations}
+          title="권장 사항"
+          variant="recommendation"
+        />
+      </section>
+
+      <section
+        aria-labelledby="analysis-changes-title"
+        className="pull-request-review__analysis-changes"
+      >
+        <div className="pull-request-review__analysis-section-heading">
+          <h3 id="analysis-changes-title">변경 파일</h3>
+          {analysisResult.changes.length > 0 ? (
+            <span className="pull-request-review__analysis-count">
+              {analysisResult.changes.length}개
+            </span>
+          ) : null}
         </div>
 
-        <div className="pull-request-review__draft-column">
-          <DraftSection number="5" title="영향">
-            {analysisResult.impacts.length > 0 ? (
-              <ul className="pull-request-review__bullet-list">
-                {analysisResult.impacts.map((impact) => <li key={impact}>{impact}</li>)}
-              </ul>
-            ) : (
-              <p>영향 정보가 없습니다.</p>
-            )}
-          </DraftSection>
-          <DraftSection number="6" title="권장 사항">
-            {analysisResult.recommendations.length > 0 ? (
-              <ul className="pull-request-review__bullet-list">
-                {analysisResult.recommendations.map((item) => <li key={item}>{item}</li>)}
-              </ul>
-            ) : (
-              <p>권장 사항이 없습니다.</p>
-            )}
-          </DraftSection>
-          <DraftSection number="7" title="후속 작업">
-            <div className="pull-request-review__follow-ups">
-              {followUps.map((item) => (
-                <button
-                  aria-label={`${item.label} ${item.completed ? "완료 해제" : "완료 처리"}`}
-                  aria-pressed={item.completed}
-                  key={item.id}
-                  onClick={() => onToggleFollowUp(item.id)}
-                  type="button"
-                >
-                  <span aria-hidden="true">{item.completed ? "☑" : "☐"}</span>
-                  {item.label}
-                </button>
+        {analysisResult.changes.length > 0 ? (
+          <>
+            <ul className="pull-request-review__analysis-change-list">
+              {visibleChanges.map((change) => (
+                <li key={`${change.filePath}-${change.description}`}>
+                  <code>{change.filePath}</code>
+                  <span>{change.description}</span>
+                </li>
               ))}
-            </div>
-          </DraftSection>
+            </ul>
+            {hiddenChangeCount > 0 ? (
+              <div className="pull-request-review__analysis-change-controls">
+                {!showAllChanges ? (
+                  <Button onClick={() => setShowAllChanges(true)} size="sm" variant="secondary">
+                    전체 변경 파일 {analysisResult.changes.length}개 보기
+                  </Button>
+                ) : (
+                  <Button onClick={() => setShowAllChanges(false)} size="sm" variant="ghost">
+                    접기
+                  </Button>
+                )}
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <p className="pull-request-review__analysis-empty">변경 파일 정보가 없습니다.</p>
+        )}
+      </section>
+
+      <section
+        aria-labelledby="analysis-follow-ups-title"
+        className="pull-request-review__analysis-follow-ups"
+      >
+        <h3 id="analysis-follow-ups-title">후속 작업</h3>
+        <p className="pull-request-review__analysis-follow-ups-note">
+          프로젝트 기록 승인 전 로컬 체크리스트입니다.
+        </p>
+        <div className="pull-request-review__follow-ups">
+          {followUps.map((item) => (
+            <button
+              aria-label={`${item.label} ${item.completed ? "완료 해제" : "완료 처리"}`}
+              aria-pressed={item.completed}
+              key={item.id}
+              onClick={() => onToggleFollowUp(item.id)}
+              type="button"
+            >
+              <span aria-hidden="true">{item.completed ? "☑" : "☐"}</span>
+              {item.label}
+            </button>
+          ))}
         </div>
-      </div>
+      </section>
     </section>
   );
 }
 
-function DraftSection({ number, title, children }: { number: string; title: string; children: React.ReactNode }) {
+function AnalysisInsightCard({
+  count,
+  emptyText,
+  items,
+  title,
+  variant,
+}: {
+  count: number;
+  emptyText: string;
+  items: string[];
+  title: string;
+  variant: "impact" | "risk" | "recommendation";
+}) {
   return (
-    <section className="pull-request-review__draft-section">
-      <h3>{number}. {title}</h3>
-      {children}
-    </section>
+    <article className={`pull-request-review__insight-card pull-request-review__insight-card--${variant}`}>
+      <header className="pull-request-review__insight-card-header">
+        <h4>{title}</h4>
+        {count > 0 ? <Badge variant="neutral">{count}</Badge> : null}
+      </header>
+      {items.length > 0 ? (
+        <ul className="pull-request-review__insight-list">
+          {items.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      ) : (
+        <p className="pull-request-review__analysis-empty">{emptyText}</p>
+      )}
+    </article>
   );
 }
 

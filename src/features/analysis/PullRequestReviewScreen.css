@@ -690,6 +690,179 @@
   padding: 8px 0;
 }
 
+.pull-request-review__analysis-result {
+  gap: 16px;
+}
+
+.pull-request-review__analysis-header h2 {
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.pull-request-review__analysis-header-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.pull-request-review__analysis-summary {
+  background: var(--color-surface-muted, #f7f9f8);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+}
+
+.pull-request-review__analysis-summary h3,
+.pull-request-review__analysis-changes h3,
+.pull-request-review__analysis-follow-ups h3 {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.pull-request-review__analysis-summary p {
+  color: var(--color-text-primary);
+  font-size: 14px;
+  line-height: 1.65;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.pull-request-review__analysis-insights {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.pull-request-review__insight-card {
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 16px;
+}
+
+.pull-request-review__insight-card--impact {
+  background: #f7f9f8;
+  border: 1px solid var(--color-border);
+}
+
+.pull-request-review__insight-card--risk {
+  background: var(--color-danger-soft, #fff0f0);
+  border: 1px solid rgba(220, 38, 38, 0.12);
+}
+
+.pull-request-review__insight-card--recommendation {
+  background: #f3fbf7;
+  border: 1px solid rgba(34, 139, 87, 0.12);
+}
+
+.pull-request-review__insight-card-header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.pull-request-review__insight-card-header h4 {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.pull-request-review__insight-list {
+  color: var(--color-text-primary);
+  display: grid;
+  font-size: 13px;
+  gap: 8px;
+  line-height: 1.55;
+  list-style: disc;
+  margin: 0;
+  overflow-wrap: anywhere;
+  padding-left: 18px;
+}
+
+.pull-request-review__analysis-section-heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.pull-request-review__analysis-count {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.pull-request-review__analysis-changes {
+  display: grid;
+  gap: 12px;
+}
+
+.pull-request-review__analysis-change-list {
+  display: grid;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pull-request-review__analysis-change-list li {
+  border-bottom: 1px solid var(--color-border);
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+}
+
+.pull-request-review__analysis-change-list li:last-child {
+  border-bottom: 0;
+}
+
+.pull-request-review__analysis-change-list code {
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.pull-request-review__analysis-change-list span {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.pull-request-review__analysis-change-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.pull-request-review__analysis-follow-ups {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+}
+
+.pull-request-review__analysis-follow-ups-note {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.pull-request-review__analysis-empty {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+}
+
 .pull-request-review__change-list {
   display: grid;
   gap: 10px;
@@ -805,6 +978,12 @@
   justify-content: flex-end;
 }
 
+@media (max-width: 1024px) {
+  .pull-request-review__analysis-insights {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 1199px) {
   .pull-request-review__header {
     align-items: flex-start;
@@ -833,6 +1012,10 @@
 
   .pull-request-review__draft-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pull-request-review__analysis-insights {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .pull-request-review__state-panel {
@@ -896,6 +1079,14 @@
   .pull-request-review__draft-grid,
   .pull-request-review__draft-bottom {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pull-request-review__analysis-insights {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pull-request-review__analysis-change-controls .ui-button {
+    min-height: 44px;
   }
 
   .pull-request-review__follow-ups button {
