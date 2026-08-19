@@ -885,6 +885,53 @@
   margin: 0;
 }
 
+.pull-request-review__edit-input,
+.pull-request-review__edit-textarea {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  color: var(--color-text-primary);
+  font: inherit;
+  line-height: 1.5;
+  margin: 0;
+  min-width: 0;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.pull-request-review__edit-textarea {
+  resize: vertical;
+}
+
+.pull-request-review__edit-list {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pull-request-review__edit-list > li,
+.pull-request-review__edit-change-row,
+.pull-request-review__edit-role-impact {
+  display: grid;
+  gap: 8px;
+}
+
+.pull-request-review__edit-list > li {
+  background: var(--color-surface-muted, #f7f9f8);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.pull-request-review__analysis-insights--editing {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pull-request-review__analysis-result--editing .pull-request-review__analysis-summary {
+  gap: 12px;
+}
+
 .pull-request-review__analysis-diff,
 .pull-request-review__analysis-tags,
 .pull-request-review__analysis-role-impacts,
