@@ -863,6 +863,187 @@
   margin: 0;
 }
 
+.pull-request-review__analysis-diff,
+.pull-request-review__analysis-tags,
+.pull-request-review__analysis-role-impacts,
+.pull-request-review__analysis-confirmation,
+.pull-request-review__analysis-evidence {
+  display: grid;
+  gap: 10px;
+}
+
+.pull-request-review__analysis-diff h3,
+.pull-request-review__analysis-tags h3,
+.pull-request-review__analysis-role-impacts h3,
+.pull-request-review__analysis-confirmation h3,
+.pull-request-review__analysis-evidence h3 {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.pull-request-review__analysis-diff-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pull-request-review__analysis-diff-grid article {
+  background: var(--color-surface-muted, #f7f9f8);
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.pull-request-review__analysis-diff-grid h4 {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.pull-request-review__analysis-diff-grid p {
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.pull-request-review__analysis-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pull-request-review__analysis-tag-list li {
+  background: var(--color-surface-muted, #f7f9f8);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-primary);
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 4px 10px;
+}
+
+.pull-request-review__role-impact-list {
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pull-request-review__role-impact-list li {
+  background: var(--color-surface-muted, #f7f9f8);
+  border-radius: 12px;
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+}
+
+.pull-request-review__role-impact-header {
+  display: grid;
+  gap: 4px;
+}
+
+.pull-request-review__role-impact-header strong {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.pull-request-review__role-impact-header span {
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.pull-request-review__role-impact-basis {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.pull-request-review__evidence-refs {
+  color: var(--color-text-muted);
+  display: grid;
+  font-size: 12px;
+  gap: 6px;
+  line-height: 1.5;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pull-request-review__evidence-refs li {
+  display: grid;
+  gap: 2px;
+}
+
+.pull-request-review__evidence-refs code {
+  font-size: 11px;
+}
+
+.pull-request-review__evidence-list {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pull-request-review__evidence-list li {
+  background: var(--color-surface-muted, #f7f9f8);
+  border-radius: 12px;
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+.pull-request-review__evidence-item-header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.pull-request-review__evidence-item-header code {
+  font-size: 11px;
+}
+
+.pull-request-review__evidence-list p {
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.pull-request-review__evidence-score {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.pull-request-review__follow-up-item {
+  display: grid;
+  gap: 6px;
+}
+
+.pull-request-review__follow-up-role {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  margin-right: 6px;
+}
+
 .pull-request-review__change-list {
   display: grid;
   gap: 10px;
@@ -1015,6 +1196,10 @@
 
 @media (max-width: 1024px) {
   .pull-request-review__analysis-insights {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pull-request-review__analysis-diff-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -78,16 +78,79 @@ export type AnalysisResultChange = {
   description: string;
 };
 
+export type AnalysisResultEvidence = {
+  id: string;
+  source: string;
+  location: string;
+  description: string | null;
+  chunkId?: string | null;
+  similarityScore?: number | null;
+};
+
+export type AnalysisResultRoleImpact = {
+  role: string;
+  impact: string;
+  basis: string | null;
+  evidenceRefs: string[];
+};
+
+export type AnalysisResultFollowUpTask = {
+  role: string | null;
+  task: string;
+  evidenceRefs: string[];
+};
+
+export type AnalysisResultReview = {
+  filePath: string | null;
+  lineNumber: number | null;
+  comment: string;
+};
+
 export type AnalysisResult = {
   summary: string;
   changes: AnalysisResultChange[];
   impacts: string[];
   risks: string[];
   recommendations: string[];
+  purpose: string;
+  changeReason: string;
+  before: string;
+  after: string;
+  relatedFeatures: string[];
+  affectedRoles: string[];
+  roleImpacts: AnalysisResultRoleImpact[];
+  followUpTasks: AnalysisResultFollowUpTask[];
+  needsConfirmation: string[];
+  evidence: AnalysisResultEvidence[];
+  riskScore?: number;
+  reviews: AnalysisResultReview[];
 };
 
 export function isActiveAnalysisStatus(status: AnalysisStatus) {
   return status === "PENDING" || status === "PROCESSING";
+}
+
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function parseNullableString(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (value === null) return null;
+  return null;
+}
+
+function parseOptionalNullableString(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  return parseNullableString(value);
+}
+
+function parseOptionalNullableNumber(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return null;
 }
 
 export function parseAnalysisResult(value: unknown): AnalysisResult | null {
@@ -95,6 +158,10 @@ export function parseAnalysisResult(value: unknown): AnalysisResult | null {
 
   const record = value as Record<string, unknown>;
   const summary = typeof record.summary === "string" ? record.summary : "";
+  const purpose = typeof record.purpose === "string" ? record.purpose : "";
+  const changeReason = typeof record.changeReason === "string" ? record.changeReason : "";
+  const before = typeof record.before === "string" ? record.before : "";
+  const after = typeof record.after === "string" ? record.after : "";
   const changes = Array.isArray(record.changes)
     ? record.changes
         .filter((item): item is Record<string, unknown> => item && typeof item === "object")
@@ -104,27 +171,113 @@ export function parseAnalysisResult(value: unknown): AnalysisResult | null {
         }))
         .filter((item) => item.filePath || item.description)
     : [];
-  const impacts = Array.isArray(record.impacts)
-    ? record.impacts.filter((item): item is string => typeof item === "string")
+  const impacts = parseStringArray(record.impacts);
+  const risks = parseStringArray(record.risks);
+  const recommendations = parseStringArray(record.recommendations);
+  const relatedFeatures = parseStringArray(record.relatedFeatures);
+  const affectedRoles = parseStringArray(record.affectedRoles);
+  const needsConfirmation = parseStringArray(record.needsConfirmation);
+  const roleImpacts = Array.isArray(record.roleImpacts)
+    ? record.roleImpacts
+        .filter((item): item is Record<string, unknown> => item && typeof item === "object")
+        .map((item) => ({
+          role: typeof item.role === "string" ? item.role : "",
+          impact: typeof item.impact === "string" ? item.impact : "",
+          basis: parseNullableString(item.basis),
+          evidenceRefs: parseStringArray(item.evidenceRefs),
+        }))
+        .filter((item) => item.role || item.impact || item.basis)
     : [];
-  const risks = Array.isArray(record.risks)
-    ? record.risks.filter((item): item is string => typeof item === "string")
+  const followUpTasks = Array.isArray(record.followUpTasks)
+    ? record.followUpTasks
+        .filter((item): item is Record<string, unknown> => item && typeof item === "object")
+        .map((item) => ({
+          role: parseNullableString(item.role),
+          task: typeof item.task === "string" ? item.task : "",
+          evidenceRefs: parseStringArray(item.evidenceRefs),
+        }))
+        .filter((item) => item.task)
     : [];
-  const recommendations = Array.isArray(record.recommendations)
-    ? record.recommendations.filter((item): item is string => typeof item === "string")
+  const evidence = Array.isArray(record.evidence)
+    ? record.evidence
+        .filter((item): item is Record<string, unknown> => item && typeof item === "object")
+        .map((item) => {
+          const parsed: AnalysisResultEvidence = {
+            id: typeof item.id === "string" ? item.id : "",
+            source: typeof item.source === "string" ? item.source : "",
+            location: typeof item.location === "string" ? item.location : "",
+            description: parseNullableString(item.description),
+          };
+          const chunkId = parseOptionalNullableString(item.chunkId);
+          if (chunkId !== undefined) parsed.chunkId = chunkId;
+          const similarityScore = parseOptionalNullableNumber(item.similarityScore);
+          if (similarityScore !== undefined) parsed.similarityScore = similarityScore;
+          return parsed;
+        })
+        .filter((item) => item.id)
     : [];
+  const reviews = Array.isArray(record.reviews)
+    ? record.reviews
+        .filter((item): item is Record<string, unknown> => item && typeof item === "object")
+        .map((item) => ({
+          filePath: parseNullableString(item.filePath),
+          lineNumber: typeof item.lineNumber === "number" && Number.isFinite(item.lineNumber)
+            ? item.lineNumber
+            : item.lineNumber === null
+              ? null
+              : null,
+          comment: typeof item.comment === "string" ? item.comment : "",
+        }))
+        .filter((item) => item.comment || item.filePath)
+    : [];
+  const riskScore = typeof record.riskScore === "number" && Number.isFinite(record.riskScore)
+    ? record.riskScore
+    : undefined;
 
-  if (
-    !summary
-    && changes.length === 0
-    && impacts.length === 0
-    && risks.length === 0
-    && recommendations.length === 0
-  ) {
-    return null;
-  }
+  const hasContent = Boolean(
+    summary
+    || purpose
+    || changeReason
+    || before
+    || after
+    || changes.length > 0
+    || impacts.length > 0
+    || risks.length > 0
+    || recommendations.length > 0
+    || relatedFeatures.length > 0
+    || affectedRoles.length > 0
+    || roleImpacts.length > 0
+    || followUpTasks.length > 0
+    || needsConfirmation.length > 0
+    || evidence.length > 0
+    || reviews.length > 0
+    || riskScore !== undefined,
+  );
 
-  return { summary, changes, impacts, risks, recommendations };
+  if (!hasContent) return null;
+
+  const result: AnalysisResult = {
+    summary,
+    changes,
+    impacts,
+    risks,
+    recommendations,
+    purpose,
+    changeReason,
+    before,
+    after,
+    relatedFeatures,
+    affectedRoles,
+    roleImpacts,
+    followUpTasks,
+    needsConfirmation,
+    evidence,
+    reviews,
+  };
+
+  if (riskScore !== undefined) result.riskScore = riskScore;
+
+  return result;
 }
 
 export function getAnalysisApiErrorCode(error: unknown) {
