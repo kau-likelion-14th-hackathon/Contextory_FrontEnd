@@ -348,6 +348,38 @@ export function canApproveAnalysisRecord(
   return !pending && recordStatus !== "APPROVED";
 }
 
+export function canManageAnalysisMemory(permissionRole?: string | null) {
+  const role = permissionRole?.trim().toUpperCase();
+  return role === "OWNER" || role === "ADMIN";
+}
+
+export function canRegisterAnalysisMemory({
+  recordStatus,
+  memoryEnabled,
+  pending,
+  permissionRole,
+}: {
+  recordStatus?: AnalysisRecordStatus | null;
+  memoryEnabled?: boolean;
+  pending: boolean;
+  permissionRole?: string | null;
+}) {
+  return recordStatus === "APPROVED"
+    && !memoryEnabled
+    && !pending
+    && canManageAnalysisMemory(permissionRole);
+}
+
+export function mapAnalysisRecordResponse(response: AnalysisRecordResponse) {
+  return {
+    recordStatus: response.recordStatus,
+    recordId: typeof response.recordId === "number" ? response.recordId : null,
+    approvedAt: response.approvedAt ?? null,
+    memoryEnabled: Boolean(response.memoryEnabled),
+    memoryEnabledAt: response.memoryEnabledAt ?? null,
+  };
+}
+
 /** FE 전용 메타를 제외한 분석 결과 페이로드를 PATCH body용으로 만든다. */
 export function serializeAnalysisResultForApi(result: AnalysisResult): Record<string, unknown> {
   if (!result.hasExtendedFields) {
@@ -488,6 +520,17 @@ export function approveAnalysis(
 ) {
   return requestApiResult<AnalysisRecordResponse>(
     `/api/projects/${encodeURIComponent(projectId)}/analyses/${encodeURIComponent(analysisId)}/approve`,
+    { method: "POST", signal },
+  );
+}
+
+export function registerAnalysisMemory(
+  projectId: string | number,
+  analysisId: string | number,
+  signal?: AbortSignal,
+) {
+  return requestApiResult<AnalysisRecordResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/analyses/${encodeURIComponent(analysisId)}/memory`,
     { method: "POST", signal },
   );
 }

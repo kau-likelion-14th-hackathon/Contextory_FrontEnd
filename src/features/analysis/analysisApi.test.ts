@@ -685,6 +685,133 @@ describe("Analysis API", () => {
     expect(canApproveAnalysisRecord("APPROVED", false)).toBe(false);
   });
 
+  it("registers analysis memory with POST memory url and empty body", async () => {
+    const record = {
+      analysisId: 12,
+      analysisResult: { summary: "approved" },
+      approvedAt: "2026-08-19T02:00:00Z",
+      approvedBy: 2,
+      createdAt: "2026-08-19T00:00:00Z",
+      editedBy: null,
+      memoryEnabled: true,
+      memoryEnabledAt: "2026-08-19T03:00:00Z",
+      memoryEnabledBy: 2,
+      prNumber: 128,
+      projectId: 39,
+      recordId: 90,
+      recordStatus: "APPROVED",
+      updatedAt: "2026-08-19T03:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue(apiResponse(record));
+    vi.stubGlobal("fetch", fetchMock);
+    const { registerAnalysisMemory } = await loadAnalysisApi();
+
+    await expect(registerAnalysisMemory("39", 12)).resolves.toEqual(record);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.test/api/projects/39/analyses/12/memory",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.body).toBeUndefined();
+  });
+
+  it("throws when register analysis memory fails", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json(
+        { code: "PROJECT_RECORD_4031", isSuccess: false, message: "forbidden", result: null },
+        { status: 403 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { getAnalysisApiErrorCode, registerAnalysisMemory } = await loadAnalysisApi();
+
+    const error = await registerAnalysisMemory(39, 12).catch((caught) => caught);
+    expect(error).toMatchObject({ status: 403 });
+    expect(getAnalysisApiErrorCode(error)).toBe("PROJECT_RECORD_4031");
+  });
+
+  it("allows memory registration only for approved records with manage permission", async () => {
+    const { canRegisterAnalysisMemory } = await loadAnalysisApi();
+
+    expect(canRegisterAnalysisMemory({
+      recordStatus: "APPROVED",
+      memoryEnabled: false,
+      pending: false,
+      permissionRole: "OWNER",
+    })).toBe(true);
+
+    expect(canRegisterAnalysisMemory({
+      recordStatus: "APPROVED",
+      memoryEnabled: false,
+      pending: false,
+      permissionRole: "ADMIN",
+    })).toBe(true);
+
+    expect(canRegisterAnalysisMemory({
+      recordStatus: "DRAFT",
+      memoryEnabled: false,
+      pending: false,
+      permissionRole: "OWNER",
+    })).toBe(false);
+
+    expect(canRegisterAnalysisMemory({
+      recordStatus: null,
+      memoryEnabled: false,
+      pending: false,
+      permissionRole: "OWNER",
+    })).toBe(false);
+
+    expect(canRegisterAnalysisMemory({
+      recordStatus: "APPROVED",
+      memoryEnabled: false,
+      pending: false,
+      permissionRole: "MEMBER",
+    })).toBe(false);
+  });
+
+  it("blocks memory registration while pending or already enabled", async () => {
+    const { canRegisterAnalysisMemory, mapAnalysisRecordResponse } = await loadAnalysisApi();
+
+    expect(canRegisterAnalysisMemory({
+      recordStatus: "APPROVED",
+      memoryEnabled: false,
+      pending: true,
+      permissionRole: "OWNER",
+    })).toBe(false);
+
+    expect(canRegisterAnalysisMemory({
+      recordStatus: "APPROVED",
+      memoryEnabled: true,
+      pending: false,
+      permissionRole: "OWNER",
+    })).toBe(false);
+
+    const mapped = mapAnalysisRecordResponse({
+      analysisId: 12,
+      analysisResult: null,
+      approvedAt: "2026-08-19T02:00:00Z",
+      approvedBy: 2,
+      createdAt: "2026-08-19T00:00:00Z",
+      editedBy: null,
+      memoryEnabled: true,
+      memoryEnabledAt: "2026-08-19T03:00:00Z",
+      memoryEnabledBy: 2,
+      prNumber: 128,
+      projectId: 39,
+      recordId: 90,
+      recordStatus: "APPROVED",
+      updatedAt: "2026-08-19T03:00:00Z",
+    });
+
+    expect(mapped.memoryEnabled).toBe(true);
+    expect(mapped.memoryEnabledAt).toBe("2026-08-19T03:00:00Z");
+    expect(canRegisterAnalysisMemory({
+      ...mapped,
+      pending: false,
+      permissionRole: "ADMIN",
+    })).toBe(false);
+  });
+
   it("serializes analysis result without FE-only metadata fields", async () => {
     const { parseAnalysisResult, serializeAnalysisResultForApi } = await loadAnalysisApi();
     const parsed = parseAnalysisResult({
