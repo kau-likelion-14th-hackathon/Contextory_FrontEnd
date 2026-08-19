@@ -129,9 +129,10 @@
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
+  color: inherit;
   display: grid;
   gap: 16px;
-  grid-template-columns: 90px minmax(0, 1fr) minmax(330px, 390px);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
   min-height: 100px;
   min-width: 0;
   padding: 13px 16px;

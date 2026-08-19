@@ -105,7 +105,7 @@ export const router = createBrowserRouter([
                 element: <ProjectMemoryScreen />,
               },
               {
-                path: "records/:recordId",
+                path: "records/:analysisId",
                 element: <ProjectMemoryDetailScreen />,
               },
               {
