@@ -14,6 +14,7 @@ import {
   getAnalysisFeedbackMessage,
   getLatestAnalysisByPrNumber,
   isActiveAnalysisStatus,
+  mapAnalysisDetailRecord,
   mapAnalysisRecordResponse,
   parseAnalysisResult,
   registerAnalysisMemory,
@@ -77,7 +78,7 @@ type AnalysisLoadState = "loading" | "success" | "invalid" | "not-found" | "erro
 
 type AnalysisRestoreState = "idle" | "loading" | "ready" | "error";
 
-/** GET analysis에 record 정보가 붙기 전까지 세션 내 수정/승인/메모리 등록 결과만 보관한다. */
+/** GET analysis 상세 또는 수정/승인/메모리 API 응답으로 복원한 기록 상태. */
 type AnalysisRecordState = {
   recordStatus: AnalysisRecordStatus;
   recordId: number | null;
@@ -479,6 +480,7 @@ export function PullRequestReviewScreen() {
         if (cancelled || signal.aborted || currentGeneration !== requestGeneration) return;
 
         setAnalysis(detail);
+        setAnalysisRecord(mapAnalysisDetailRecord(detail));
         setAnalysisLoadState("success");
 
         if (isActiveAnalysisStatus(detail.analysisStatus)) {
