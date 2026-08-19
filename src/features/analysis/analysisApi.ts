@@ -42,13 +42,20 @@ export type AnalysisCancelResponse = {
   analysisStatus: AnalysisStatus;
 };
 
+export type AnalysisRequestedBy = {
+  userId: number;
+  username: string;
+};
+
 export type AnalysisSummary = {
   analysisId: number;
-  projectId: number;
   prNumber: number;
-  analysisStatus: AnalysisStatus;
   analyzedHeadSha: string | null;
+  analysisStatus: AnalysisStatus;
+  modelName: string | null;
+  requestedBy: AnalysisRequestedBy;
   requestedAt: string;
+  completedAt: string | null;
 };
 
 export type AnalysisListResponse = {

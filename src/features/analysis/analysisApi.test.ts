@@ -16,6 +16,20 @@ function apiResponse(result: unknown) {
   return Response.json({ code: "SUCCESS", isSuccess: true, message: "success", result });
 }
 
+function analysisListItem(overrides: Record<string, unknown> = {}) {
+  return {
+    analysisId: 12,
+    analysisStatus: "COMPLETED",
+    analyzedHeadSha: "abc123",
+    completedAt: "2026-08-17T01:00:00Z",
+    modelName: "gpt-4",
+    prNumber: 128,
+    requestedAt: "2026-08-17T00:00:00Z",
+    requestedBy: { userId: 1, username: "dev" },
+    ...overrides,
+  };
+}
+
 describe("Analysis API", () => {
   it("requests analysis with prNumber in POST body", async () => {
     const result = {
@@ -42,15 +56,9 @@ describe("Analysis API", () => {
   });
 
   it("gets analyses with prNumber page and size query", async () => {
+    const item = analysisListItem();
     const result = {
-      content: [{
-        analysisId: 12,
-        analysisStatus: "COMPLETED",
-        analyzedHeadSha: "abc123",
-        prNumber: 128,
-        projectId: 39,
-        requestedAt: "2026-08-17T00:00:00Z",
-      }],
+      content: [item],
       hasNext: false,
       page: 0,
       size: 1,
@@ -70,14 +78,13 @@ describe("Analysis API", () => {
   });
 
   it("returns the latest analysis summary for a PR number", async () => {
-    const summary = {
+    const summary = analysisListItem({
       analysisId: 15,
       analysisStatus: "PROCESSING",
       analyzedHeadSha: null,
-      prNumber: 128,
-      projectId: 39,
-      requestedAt: "2026-08-17T00:00:00Z",
-    };
+      completedAt: null,
+      modelName: null,
+    });
     const fetchMock = vi.fn().mockResolvedValue(apiResponse({
       content: [summary],
       hasNext: false,
@@ -105,6 +112,21 @@ describe("Analysis API", () => {
     const { getLatestAnalysisByPrNumber } = await loadAnalysisApi();
 
     await expect(getLatestAnalysisByPrNumber(39, 128)).resolves.toBeNull();
+  });
+
+  it("throws when analyses list request fails instead of returning null", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("upstream unavailable", {
+        status: 502,
+        headers: { "Content-Type": "text/plain" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { getLatestAnalysisByPrNumber } = await loadAnalysisApi();
+
+    await expect(getLatestAnalysisByPrNumber(39, 128)).rejects.toMatchObject({
+      status: 502,
+    });
   });
 
   it("gets analysis detail from the analysis URL and forwards AbortSignal", async () => {
