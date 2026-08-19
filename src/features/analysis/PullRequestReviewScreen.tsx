@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../shared/api/client";
 import { PageContainer } from "../../shared/layouts";
 import { Badge, Button, EmptyState, ErrorState, LoadingState, Modal } from "../../shared/ui";
 import {
+  approveAnalysis,
   cancelAnalysis,
+  canApproveAnalysisRecord,
+  canEditAnalysisRecord,
   getAnalysis,
   getAnalysisApiErrorCode,
   getLatestAnalysisByPrNumber,
@@ -12,7 +15,11 @@ import {
   parseAnalysisResult,
   requestAnalysis,
   retryAnalysis,
+  serializeAnalysisResultForApi,
+  updateAnalysis,
   type AnalysisDetail,
+  type AnalysisRecordResponse,
+  type AnalysisRecordStatus,
   type AnalysisResult,
   type AnalysisResultEvidence,
   type AnalysisStatus,
@@ -52,6 +59,14 @@ type PullRequestSourceState =
 type AnalysisLoadState = "loading" | "success" | "invalid" | "not-found" | "error";
 
 type AnalysisRestoreState = "idle" | "loading" | "ready" | "error";
+
+/** GET analysis에 record 정보가 붙기 전까지 세션 내 수정/승인 결과만 보관한다. */
+type AnalysisRecordState = {
+  recordStatus: AnalysisRecordStatus;
+  recordId: number | null;
+  approvedByUsername: string | null;
+  approvedAt: string | null;
+};
 
 type FollowUpTaskState = {
   id: string;
@@ -230,13 +245,12 @@ function AnalysisFeedback({
 
 export function PullRequestReviewScreen() {
   const { projectId = "", pullRequestId, analysisId } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const queryState = searchParams.get("state");
-  const isApprovedView = queryState === "approved";
   const [discardOpen, setDiscardOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [analysisRequesting, setAnalysisRequesting] = useState(false);
   const [analysisActionPending, setAnalysisActionPending] = useState(false);
+  const [recordActionPending, setRecordActionPending] = useState(false);
+  const [analysisRecord, setAnalysisRecord] = useState<AnalysisRecordState | null>(null);
   const [followUpTaskState, setFollowUpTaskState] = useState<FollowUpTaskState[]>([]);
   const [sourceState, setSourceState] = useState<PullRequestSourceState>("loading");
   const [sourceError, setSourceError] = useState("");
@@ -266,9 +280,21 @@ export function PullRequestReviewScreen() {
     : null;
   const analysisStatus = analysis?.analysisStatus;
   const isAnalysisInProgress = analysisStatus ? isActiveAnalysisStatus(analysisStatus) : false;
+  const isApprovedView = analysisRecord?.recordStatus === "APPROVED";
   const canShowCompletedWorkspace = isAnalysisRoute
     && analysisStatus === "COMPLETED"
     && !isApprovedView;
+  const canSaveRecord = canEditAnalysisRecord(analysisRecord?.recordStatus, recordActionPending)
+    && Boolean(validAnalysisId)
+    && Boolean(parsedAnalysisResult);
+  const canApproveRecord = canApproveAnalysisRecord(analysisRecord?.recordStatus, recordActionPending)
+    && Boolean(validAnalysisId)
+    && analysisStatus === "COMPLETED";
+
+  useEffect(() => {
+    setAnalysisRecord(null);
+    setRecordActionPending(false);
+  }, [validAnalysisId]);
 
   useEffect(() => {
     const tasks = analysis?.analysisResult
@@ -468,12 +494,21 @@ export function PullRequestReviewScreen() {
     return () => controller.abort();
   }, [analysisPrNumber, isAnalysisRoute, projectId, sourceRetryKey]);
 
-  const setApprovedView = (options?: { replace?: boolean }) => {
-    setSearchParams((currentParams) => {
-      const nextParams = new URLSearchParams(currentParams);
-      nextParams.set("state", "approved");
-      return nextParams;
-    }, { replace: options?.replace });
+  const applyRecordResponse = (response: AnalysisRecordResponse) => {
+    setAnalysisRecord({
+      recordStatus: response.recordStatus,
+      recordId: typeof response.recordId === "number" ? response.recordId : null,
+      approvedByUsername: response.approvedBy?.username ?? null,
+      approvedAt: response.approvedAt ?? null,
+    });
+
+    if (response.analysisResult != null) {
+      setAnalysis((current) => (
+        current
+          ? { ...current, analysisResult: response.analysisResult }
+          : current
+      ));
+    }
   };
 
   const requestNewAnalysis = async (prNumber: number) => {
@@ -534,13 +569,44 @@ export function PullRequestReviewScreen() {
     }
   };
 
-  const approveReview = () => {
+  const saveDraft = async () => {
+    if (!validAnalysisId || !parsedAnalysisResult || !canSaveRecord) return;
+
+    setRecordActionPending(true);
     setFeedback("");
-    setApprovedView();
+
+    try {
+      const response = await updateAnalysis(
+        projectId,
+        validAnalysisId,
+        serializeAnalysisResultForApi(parsedAnalysisResult),
+      );
+      applyRecordResponse(response);
+      setFeedback("임시 저장이 완료되었습니다.");
+    } catch (error: unknown) {
+      setFeedback(getAnalysisFeedbackMessage(error, "분석 결과 저장에 실패했습니다."));
+    } finally {
+      setRecordActionPending(false);
+    }
   };
 
-  const saveDraft = () => {
-    setFeedback("임시 저장이 완료되었습니다.");
+  const approveReview = async () => {
+    if (!validAnalysisId || !canApproveRecord) return;
+
+    setRecordActionPending(true);
+    setFeedback("");
+
+    try {
+      const response = await approveAnalysis(projectId, validAnalysisId);
+      applyRecordResponse(response);
+      if (response.recordStatus !== "APPROVED") {
+        setFeedback("승인 요청은 처리되었지만 승인 완료 상태가 아닙니다.");
+      }
+    } catch (error: unknown) {
+      setFeedback(getAnalysisFeedbackMessage(error, "분석 승인에 실패했습니다."));
+    } finally {
+      setRecordActionPending(false);
+    }
   };
 
   const copyDraft = async () => {
@@ -645,17 +711,21 @@ export function PullRequestReviewScreen() {
             analysisId={isAnalysisRoute ? analysisId : undefined}
             analysisRequesting={analysisRequesting}
             analysisStatus={isAnalysisRoute ? analysis?.analysisStatus : undefined}
-            isApprovedView={isApprovedView}
+            canApprove={canApproveRecord}
             canRequestAnalysis={!isPullRequestRoute || analysisRestoreState === "ready"}
+            isApprovedView={isApprovedView}
             onAnalyze={startAnalysis}
-            onApprove={approveReview}
+            onApprove={() => void approveReview()}
             pullRequest={pullRequest}
             projectId={projectId}
+            recordActionPending={recordActionPending}
           />
 
           {isApprovedView ? (
             <ApprovedPanel
               analysisResult={parsedAnalysisResult}
+              approvedAt={analysisRecord?.approvedAt}
+              approvedByUsername={analysisRecord?.approvedByUsername}
               projectId={projectId}
               pullRequest={pullRequest}
             />
@@ -708,15 +778,21 @@ export function PullRequestReviewScreen() {
                 <Button onClick={() => setDiscardOpen(true)} variant="secondary">
                   폐기
                 </Button>
-                <Button onClick={saveDraft} variant="secondary">
-                  임시 저장
+                <Button
+                  disabled={!canSaveRecord}
+                  onClick={() => void saveDraft()}
+                  variant="secondary"
+                >
+                  {recordActionPending ? "저장 중..." : "임시 저장"}
                 </Button>
               </div>
               <div>
                 <Button onClick={copyDraft} variant="secondary">
                   내용 복사
                 </Button>
-                <Button onClick={approveReview}>승인 요청</Button>
+                <Button disabled={!canApproveRecord} onClick={() => void approveReview()}>
+                  {recordActionPending ? "승인 중..." : "승인 요청"}
+                </Button>
               </div>
             </footer>
           ) : null}
@@ -758,22 +834,26 @@ type ReviewHeaderProps = {
   analysisStatus?: AnalysisStatus;
   analysisRequesting: boolean;
   canRequestAnalysis?: boolean;
+  canApprove?: boolean;
   isApprovedView: boolean;
   pullRequest?: PullRequestDetail;
   onAnalyze: () => void;
   onApprove: () => void;
+  recordActionPending?: boolean;
 };
 
 function ReviewHeader({
   analysisId,
   analysisRequesting,
   analysisStatus,
+  canApprove = false,
   canRequestAnalysis = true,
   isApprovedView,
   onAnalyze,
   onApprove,
   projectId,
   pullRequest,
+  recordActionPending = false,
 }: ReviewHeaderProps) {
   const status = isApprovedView
     ? { label: "승인 완료", variant: "success" as const }
@@ -782,6 +862,7 @@ function ReviewHeader({
       : { label: "검토 필요", variant: "warning" as const };
   const analyzeDisabled = analysisRequesting
     || !canRequestAnalysis
+    || isApprovedView
     || (analysisStatus ? isActiveAnalysisStatus(analysisStatus) : false);
 
   return (
@@ -833,8 +914,16 @@ function ReviewHeader({
             {analysisRequesting ? "분석 요청 중..." : "AI 재분석"}
           </Button>
         )}
-        <Button disabled={!isApprovedView && analysisStatus !== "COMPLETED"} onClick={onApprove} size="sm">
-          {isApprovedView ? "승인 완료" : "승인 요청"}
+        <Button
+          disabled={isApprovedView || !canApprove || recordActionPending}
+          onClick={onApprove}
+          size="sm"
+        >
+          {isApprovedView
+            ? "승인 완료"
+            : recordActionPending
+              ? "승인 중..."
+              : "승인 요청"}
         </Button>
       </div>
     </header>
@@ -1647,16 +1736,24 @@ function AnalysisCanceledPanel({
 
 function ApprovedPanel({
   analysisResult,
+  approvedAt,
+  approvedByUsername,
   projectId,
   pullRequest,
 }: {
   analysisResult: AnalysisResult | null;
+  approvedAt?: string | null;
+  approvedByUsername?: string | null;
   projectId: string;
   pullRequest?: PullRequestDetail;
 }) {
   const roleSummary = analysisResult?.affectedRoles.length
     ? analysisResult.affectedRoles.join(" / ")
     : analysisResult?.impacts.join(" / ");
+  const approvalMeta = [
+    approvedByUsername ? `승인자 · ${approvedByUsername}` : null,
+    approvedAt ? formatPullRequestDate(approvedAt) : null,
+  ].filter(Boolean).join(" · ");
 
   return (
     <section aria-labelledby="analysis-state-title" className="pull-request-review__state-panel">
@@ -1665,6 +1762,7 @@ function ApprovedPanel({
       <p>검토한 내용이 공식 프로젝트 메모리에 저장되었습니다.</p>
       <article className="pull-request-review__approved-summary">
         <h3>{pullRequest?.title ?? analysisResult?.summary ?? "승인된 기록"}</h3>
+        {approvalMeta ? <p>{approvalMeta}</p> : null}
         {roleSummary ? <p>영향 · {roleSummary}</p> : null}
       </article>
       <div className="pull-request-review__state-actions">
