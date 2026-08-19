@@ -294,7 +294,7 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
           ) : (
             <>
               <strong>카카오 로그인과 GitHub 저장소 연결은 별개입니다.</strong>
-              <p>카카오는 로그인 수단이며, 프로젝트 저장소는 생성 과정에서 별도로 연결합니다.</p>
+              <p>카카오는 로그인 수단이며, 프로젝트 저장소는 프로젝트 생성 후 설정에서 연결할 수 있습니다.</p>
             </>
           )}
         </div>
