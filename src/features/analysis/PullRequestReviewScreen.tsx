@@ -544,7 +544,7 @@ export function PullRequestReviewScreen() {
     );
   }
 
-  const showFooterActions = (isPullRequestRoute || canShowCompletedWorkspace) && !isApprovedView;
+  const showFooterActions = canShowCompletedWorkspace && !isApprovedView;
 
   return (
     <main className="pull-request-review" data-route-reference={routeReference}>
@@ -721,12 +721,12 @@ function ReviewHeader({
           >
             메모리 보기
           </Link>
-        ) : (
+        ) : analysisStatus === "FAILED" ? null : (
           <Button
             disabled={analyzeDisabled || !pullRequest}
             onClick={onAnalyze}
             size="sm"
-            variant={analysisStatus === "FAILED" || analysisStatus === "CANCELED" ? "primary" : "secondary"}
+            variant={analysisStatus === "CANCELED" ? "primary" : "secondary"}
           >
             {analysisRequesting ? "분석 요청 중..." : "AI 재분석"}
           </Button>

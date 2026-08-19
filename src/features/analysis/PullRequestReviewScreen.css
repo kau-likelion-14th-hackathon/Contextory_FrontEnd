@@ -978,12 +978,6 @@
   justify-content: flex-end;
 }
 
-@media (max-width: 1024px) {
-  .pull-request-review__analysis-insights {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 1199px) {
   .pull-request-review__header {
     align-items: flex-start;
@@ -1014,12 +1008,14 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .pull-request-review__analysis-insights {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
   .pull-request-review__state-panel {
     min-height: 620px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .pull-request-review__analysis-insights {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
