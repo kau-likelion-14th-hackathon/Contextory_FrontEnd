@@ -578,4 +578,141 @@ describe("Analysis API", () => {
       reviews: [],
     })).toBeNull();
   });
+
+  it("updates analysis with PATCH method url and analysisResult body", async () => {
+    const record = {
+      analysisId: 12,
+      analysisResult: { summary: "saved", changes: [], impacts: [], risks: [], recommendations: [] },
+      approvedAt: null,
+      approvedBy: null,
+      createdAt: "2026-08-19T00:00:00Z",
+      editedBy: { userId: 1, username: "dev" },
+      memoryEnabled: false,
+      memoryEnabledAt: null,
+      memoryEnabledBy: null,
+      prNumber: 128,
+      projectId: 39,
+      recordId: 90,
+      recordStatus: "DRAFT",
+      updatedAt: "2026-08-19T01:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue(apiResponse(record));
+    vi.stubGlobal("fetch", fetchMock);
+    const { updateAnalysis } = await loadAnalysisApi();
+    const payload = { summary: "saved", changes: [], impacts: [], risks: [], recommendations: [] };
+
+    await expect(updateAnalysis("39", 12, payload)).resolves.toEqual(record);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.test/api/projects/39/analyses/12",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ analysisResult: payload }),
+      }),
+    );
+  });
+
+  it("throws when update analysis fails", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json(
+        { code: "AI_ANALYSIS_4031", isSuccess: false, message: "forbidden", result: null },
+        { status: 403 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { updateAnalysis } = await loadAnalysisApi();
+
+    await expect(updateAnalysis(39, 12, { summary: "x" })).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+
+  it("approves analysis with POST approve url and empty body", async () => {
+    const record = {
+      analysisId: 12,
+      analysisResult: { summary: "approved" },
+      approvedAt: "2026-08-19T02:00:00Z",
+      approvedBy: { userId: 2, username: "lead" },
+      createdAt: "2026-08-19T00:00:00Z",
+      editedBy: null,
+      memoryEnabled: true,
+      memoryEnabledAt: "2026-08-19T02:00:00Z",
+      memoryEnabledBy: { userId: 2, username: "lead" },
+      prNumber: 128,
+      projectId: 39,
+      recordId: 90,
+      recordStatus: "APPROVED",
+      updatedAt: "2026-08-19T02:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue(apiResponse(record));
+    vi.stubGlobal("fetch", fetchMock);
+    const { approveAnalysis } = await loadAnalysisApi();
+
+    await expect(approveAnalysis("39", 12)).resolves.toEqual(record);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.test/api/projects/39/analyses/12/approve",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.body).toBeUndefined();
+  });
+
+  it("throws when approve analysis fails", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json(
+        { code: "AI_ANALYSIS_4091", isSuccess: false, message: "conflict", result: null },
+        { status: 409 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { approveAnalysis } = await loadAnalysisApi();
+
+    await expect(approveAnalysis(39, 12)).rejects.toMatchObject({
+      status: 409,
+    });
+  });
+
+  it("blocks edit and approve when pending or already approved", async () => {
+    const { canApproveAnalysisRecord, canEditAnalysisRecord } = await loadAnalysisApi();
+
+    expect(canEditAnalysisRecord(null, false)).toBe(true);
+    expect(canEditAnalysisRecord("DRAFT", false)).toBe(true);
+    expect(canEditAnalysisRecord("DRAFT", true)).toBe(false);
+    expect(canEditAnalysisRecord("APPROVED", false)).toBe(false);
+    expect(canEditAnalysisRecord("APPROVED", true)).toBe(false);
+
+    expect(canApproveAnalysisRecord(null, false)).toBe(true);
+    expect(canApproveAnalysisRecord("DRAFT", true)).toBe(false);
+    expect(canApproveAnalysisRecord("APPROVED", false)).toBe(false);
+  });
+
+  it("serializes analysis result without FE-only metadata fields", async () => {
+    const { parseAnalysisResult, serializeAnalysisResultForApi } = await loadAnalysisApi();
+    const parsed = parseAnalysisResult({
+      summary: "요약",
+      purpose: "목적",
+      relatedFeatures: [],
+      risks: ["회귀"],
+    });
+
+    expect(parsed).not.toBeNull();
+    expect(serializeAnalysisResultForApi(parsed!)).toEqual({
+      summary: "요약",
+      changes: [],
+      impacts: [],
+      risks: ["회귀"],
+      recommendations: [],
+      purpose: "목적",
+      changeReason: "",
+      before: "",
+      after: "",
+      relatedFeatures: [],
+      affectedRoles: [],
+      roleImpacts: [],
+      followUpTasks: [],
+      needsConfirmation: [],
+      evidence: [],
+    });
+    expect(serializeAnalysisResultForApi(parsed!)).not.toHaveProperty("hasExtendedFields");
+    expect(serializeAnalysisResultForApi(parsed!)).not.toHaveProperty("hasRisksField");
+  });
 });
