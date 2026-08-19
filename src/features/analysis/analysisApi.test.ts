@@ -188,10 +188,9 @@ describe("Analysis API", () => {
     );
   });
 
-  it("parses nullable analysisResult fields safely", async () => {
+  it("parses legacy five-field analysisResult safely", async () => {
     const { parseAnalysisResult } = await loadAnalysisApi();
 
-    expect(parseAnalysisResult(null)).toBeNull();
     expect(parseAnalysisResult({
       changes: [{ description: "updated handler", filePath: "src/api.ts" }, { foo: "bar" }],
       impacts: ["frontend"],
@@ -199,12 +198,384 @@ describe("Analysis API", () => {
       risks: ["regression"],
       summary: "Updated API error handling",
     })).toEqual({
+      summary: "Updated API error handling",
       changes: [{ description: "updated handler", filePath: "src/api.ts" }],
       impacts: ["frontend"],
       recommendations: ["add tests"],
       risks: ["regression"],
-      summary: "Updated API error handling",
+      purpose: "",
+      changeReason: "",
+      before: "",
+      after: "",
+      relatedFeatures: [],
+      affectedRoles: [],
+      roleImpacts: [],
+      followUpTasks: [],
+      needsConfirmation: [],
+      evidence: [],
+      reviews: [],
+      hasExtendedFields: false,
+      hasRisksField: true,
     });
-    expect(parseAnalysisResult({ summary: "", changes: [], impacts: [], risks: [], recommendations: [] })).toBeNull();
+  });
+
+  it("marks legacy five-field results without extended keys", async () => {
+    const { parseAnalysisResult } = await loadAnalysisApi();
+
+    const result = parseAnalysisResult({
+      summary: "legacy",
+      changes: [],
+      impacts: ["frontend"],
+      risks: [],
+      recommendations: [],
+    });
+
+    expect(result?.hasExtendedFields).toBe(false);
+  });
+
+  it("marks extended format when keys exist with empty values", async () => {
+    const { parseAnalysisResult } = await loadAnalysisApi();
+
+    const result = parseAnalysisResult({
+      summary: "extended empty",
+      relatedFeatures: [],
+      affectedRoles: [],
+      roleImpacts: [],
+      followUpTasks: [],
+      needsConfirmation: [],
+      evidence: [],
+      retrievalQualityWarning: false,
+    });
+
+    expect(result?.hasExtendedFields).toBe(true);
+    expect(result?.hasRisksField).toBe(false);
+  });
+
+  it("distinguishes legacy results from extended empty sections", async () => {
+    const { parseAnalysisResult } = await loadAnalysisApi();
+
+    const legacy = parseAnalysisResult({
+      summary: "legacy",
+      impacts: ["api"],
+      risks: [],
+      recommendations: [],
+      changes: [],
+    });
+    const extended = parseAnalysisResult({
+      summary: "extended",
+      relatedFeatures: [],
+      needsConfirmation: [],
+    });
+
+    expect(legacy?.hasExtendedFields).toBe(false);
+    expect(legacy?.hasRisksField).toBe(true);
+    expect(extended?.hasExtendedFields).toBe(true);
+    expect(extended?.hasRisksField).toBe(false);
+  });
+
+  it("parses async AnalysisResultPayload callback contract", async () => {
+    const { parseAnalysisResult } = await loadAnalysisApi();
+
+    expect(parseAnalysisResult({
+      summary: "API 오류 응답 정리",
+      purpose: "클라이언트 오류 처리 일관성 확보",
+      changeReason: "기존 message 필드만 사용하던 구조를 확장",
+      before: "message 문자열만 반환",
+      after: "code/message/details 구조 반환",
+      relatedFeatures: ["인증", "API 클라이언트"],
+      affectedRoles: ["프론트엔드", "QA"],
+      roleImpacts: [{
+        role: "프론트엔드",
+        impact: "오류 모델 수정 필요",
+        basis: "응답 스키마 변경",
+        evidenceRefs: ["ev-1"],
+      }],
+      followUpTasks: [{
+        role: "QA",
+        task: "회귀 테스트 추가",
+        evidenceRefs: ["ev-2"],
+      }],
+      needsConfirmation: ["기존 message 필드 유지 여부"],
+      evidence: [
+        {
+          id: "ev-1",
+          source: "github",
+          location: "src/api/client.ts",
+          description: "오류 파싱 로직",
+          chunkId: "chunk-1",
+          similarityScore: 0.92,
+        },
+        {
+          id: "ev-2",
+          source: "memory",
+          location: "docs/testing.md",
+          description: "회귀 테스트 가이드",
+        },
+      ],
+      confidence: 0.87,
+      retrievalQualityWarning: true,
+    })).toEqual({
+      summary: "API 오류 응답 정리",
+      purpose: "클라이언트 오류 처리 일관성 확보",
+      changeReason: "기존 message 필드만 사용하던 구조를 확장",
+      before: "message 문자열만 반환",
+      after: "code/message/details 구조 반환",
+      relatedFeatures: ["인증", "API 클라이언트"],
+      affectedRoles: ["프론트엔드", "QA"],
+      roleImpacts: [{
+        role: "프론트엔드",
+        impact: "오류 모델 수정 필요",
+        basis: "응답 스키마 변경",
+        evidenceRefs: ["ev-1"],
+      }],
+      followUpTasks: [{
+        role: "QA",
+        task: "회귀 테스트 추가",
+        evidenceRefs: ["ev-2"],
+      }],
+      needsConfirmation: ["기존 message 필드 유지 여부"],
+      evidence: [
+        {
+          id: "ev-1",
+          source: "github",
+          location: "src/api/client.ts",
+          description: "오류 파싱 로직",
+          chunkId: "chunk-1",
+          similarityScore: 0.92,
+        },
+        {
+          id: "ev-2",
+          source: "memory",
+          location: "docs/testing.md",
+          description: "회귀 테스트 가이드",
+        },
+      ],
+      confidence: 0.87,
+      retrievalQualityWarning: true,
+      changes: [],
+      impacts: [],
+      risks: [],
+      recommendations: [],
+      reviews: [],
+      hasExtendedFields: true,
+      hasRisksField: false,
+    });
+  });
+
+  it("parses confidence and ignores invalid retrievalQualityWarning values", async () => {
+    const { parseAnalysisResult } = await loadAnalysisApi();
+
+    expect(parseAnalysisResult({
+      summary: "신뢰도만 있는 결과",
+      confidence: 92,
+      retrievalQualityWarning: false,
+    })).toEqual({
+      summary: "신뢰도만 있는 결과",
+      changes: [],
+      impacts: [],
+      risks: [],
+      recommendations: [],
+      purpose: "",
+      changeReason: "",
+      before: "",
+      after: "",
+      relatedFeatures: [],
+      affectedRoles: [],
+      roleImpacts: [],
+      followUpTasks: [],
+      needsConfirmation: [],
+      evidence: [],
+      reviews: [],
+      confidence: 92,
+      hasExtendedFields: true,
+      hasRisksField: false,
+    });
+  });
+
+  it("parses legacy extra fields riskScore and reviews for backward compatibility", async () => {
+    const { parseAnalysisResult } = await loadAnalysisApi();
+
+    expect(parseAnalysisResult({
+      summary: "레거시 extra 필드",
+      riskScore: 0.35,
+      reviews: [{
+        filePath: "src/api/client.ts",
+        lineNumber: 42,
+        comment: "null 체크 추가 필요",
+      }],
+    })).toEqual({
+      summary: "레거시 extra 필드",
+      changes: [],
+      impacts: [],
+      risks: [],
+      recommendations: [],
+      purpose: "",
+      changeReason: "",
+      before: "",
+      after: "",
+      relatedFeatures: [],
+      affectedRoles: [],
+      roleImpacts: [],
+      followUpTasks: [],
+      needsConfirmation: [],
+      evidence: [],
+      reviews: [{
+        filePath: "src/api/client.ts",
+        lineNumber: 42,
+        comment: "null 체크 추가 필요",
+      }],
+      riskScore: 0.35,
+      hasExtendedFields: false,
+      hasRisksField: false,
+    });
+  });
+
+  it("parses nullable and optional analysisResult fields", async () => {
+    const { parseAnalysisResult } = await loadAnalysisApi();
+
+    expect(parseAnalysisResult({
+      summary: "요약만 있는 결과",
+      roleImpacts: [{
+        role: "백엔드",
+        impact: "영향",
+        basis: null,
+        evidenceRefs: [],
+      }],
+      followUpTasks: [{
+        role: null,
+        task: "문서화",
+        evidenceRefs: [],
+      }],
+      evidence: [{
+        id: "ev-3",
+        source: "memory",
+        location: "docs/api.md",
+        description: null,
+        chunkId: null,
+        similarityScore: null,
+      }],
+    })).toEqual({
+      summary: "요약만 있는 결과",
+      changes: [],
+      impacts: [],
+      risks: [],
+      recommendations: [],
+      purpose: "",
+      changeReason: "",
+      before: "",
+      after: "",
+      relatedFeatures: [],
+      affectedRoles: [],
+      roleImpacts: [{
+        role: "백엔드",
+        impact: "영향",
+        basis: null,
+        evidenceRefs: [],
+      }],
+      followUpTasks: [{
+        role: null,
+        task: "문서화",
+        evidenceRefs: [],
+      }],
+      needsConfirmation: [],
+      evidence: [{
+        id: "ev-3",
+        source: "memory",
+        location: "docs/api.md",
+        description: null,
+        chunkId: null,
+        similarityScore: null,
+      }],
+      reviews: [],
+      hasExtendedFields: true,
+      hasRisksField: false,
+    });
+  });
+
+  it("ignores invalid array items in analysisResult", async () => {
+    const { parseAnalysisResult } = await loadAnalysisApi();
+
+    expect(parseAnalysisResult({
+      summary: "방어적 파싱",
+      roleImpacts: [
+        { role: "FE", impact: "ok", basis: "근거", evidenceRefs: ["ev-1", 42] },
+        null,
+        "invalid",
+      ],
+      followUpTasks: [
+        { role: "QA", task: "테스트", evidenceRefs: ["ev-1"] },
+        { task: 123 },
+      ],
+      evidence: [
+        { id: "ev-1", source: "github", location: "src/a.ts", description: "desc" },
+        { id: 1, source: "bad" },
+      ],
+      reviews: [
+        { filePath: "src/a.ts", lineNumber: 10, comment: "ok" },
+        { comment: "" },
+      ],
+      relatedFeatures: ["valid", 1, null],
+    })).toEqual({
+      summary: "방어적 파싱",
+      changes: [],
+      impacts: [],
+      risks: [],
+      recommendations: [],
+      purpose: "",
+      changeReason: "",
+      before: "",
+      after: "",
+      relatedFeatures: ["valid"],
+      affectedRoles: [],
+      roleImpacts: [{
+        role: "FE",
+        impact: "ok",
+        basis: "근거",
+        evidenceRefs: ["ev-1"],
+      }],
+      followUpTasks: [{
+        role: "QA",
+        task: "테스트",
+        evidenceRefs: ["ev-1"],
+      }],
+      needsConfirmation: [],
+      evidence: [{
+        id: "ev-1",
+        source: "github",
+        location: "src/a.ts",
+        description: "desc",
+      }],
+      reviews: [{
+        filePath: "src/a.ts",
+        lineNumber: 10,
+        comment: "ok",
+      }],
+      hasExtendedFields: true,
+      hasRisksField: false,
+    });
+  });
+
+  it("returns null for empty analysisResult", async () => {
+    const { parseAnalysisResult } = await loadAnalysisApi();
+
+    expect(parseAnalysisResult(null)).toBeNull();
+    expect(parseAnalysisResult({
+      summary: "",
+      changes: [],
+      impacts: [],
+      risks: [],
+      recommendations: [],
+      purpose: "",
+      changeReason: "",
+      before: "",
+      after: "",
+      relatedFeatures: [],
+      affectedRoles: [],
+      roleImpacts: [],
+      followUpTasks: [],
+      needsConfirmation: [],
+      evidence: [],
+      reviews: [],
+    })).toBeNull();
   });
 });

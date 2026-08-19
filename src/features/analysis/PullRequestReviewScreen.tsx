@@ -14,6 +14,7 @@ import {
   retryAnalysis,
   type AnalysisDetail,
   type AnalysisResult,
+  type AnalysisResultEvidence,
   type AnalysisStatus,
 } from "./analysisApi";
 import {
@@ -23,10 +24,6 @@ import {
   type PullRequestDetail,
   type PullRequestFilesResponse,
 } from "../github/pullRequestApi";
-import {
-  pullRequestReviewMock,
-  type ReviewFollowUp,
-} from "./pullRequestReviewMock";
 import "./PullRequestReviewScreen.css";
 
 const POLLING_INTERVAL_MS = 2000;
@@ -55,6 +52,14 @@ type PullRequestSourceState =
 type AnalysisLoadState = "loading" | "success" | "invalid" | "not-found" | "error";
 
 type AnalysisRestoreState = "idle" | "loading" | "ready" | "error";
+
+type FollowUpTaskState = {
+  id: string;
+  role: string | null;
+  task: string;
+  evidenceRefs: string[];
+  completed: boolean;
+};
 
 function classifySourceError(error: unknown): PullRequestSourceState {
   const code = getPullRequestApiErrorCode(error);
@@ -232,9 +237,7 @@ export function PullRequestReviewScreen() {
   const [feedback, setFeedback] = useState("");
   const [analysisRequesting, setAnalysisRequesting] = useState(false);
   const [analysisActionPending, setAnalysisActionPending] = useState(false);
-  const [followUps, setFollowUps] = useState<ReviewFollowUp[]>(
-    pullRequestReviewMock.draft.followUps,
-  );
+  const [followUpTaskState, setFollowUpTaskState] = useState<FollowUpTaskState[]>([]);
   const [sourceState, setSourceState] = useState<PullRequestSourceState>("loading");
   const [sourceError, setSourceError] = useState("");
   const [pullRequest, setPullRequest] = useState<PullRequestDetail>();
@@ -266,6 +269,22 @@ export function PullRequestReviewScreen() {
   const canShowCompletedWorkspace = isAnalysisRoute
     && analysisStatus === "COMPLETED"
     && !isApprovedView;
+
+  useEffect(() => {
+    const tasks = analysis?.analysisResult
+      ? parseAnalysisResult(analysis.analysisResult)?.followUpTasks ?? []
+      : [];
+
+    setFollowUpTaskState(
+      tasks.map((task, index) => ({
+        id: `${analysis?.analysisId ?? "analysis"}-follow-up-${index}`,
+        role: task.role,
+        task: task.task,
+        evidenceRefs: task.evidenceRefs,
+        completed: false,
+      })),
+    );
+  }, [analysis?.analysisId, analysis?.analysisResult]);
 
   useEffect(() => {
     if (!isPullRequestRoute) return;
@@ -532,14 +551,32 @@ export function PullRequestReviewScreen() {
     let content = title;
 
     if (parsedAnalysisResult) {
-      content = [
-        title,
-        parsedAnalysisResult.summary,
-        ...parsedAnalysisResult.changes.map((change) => `${change.filePath}: ${change.description}`),
-        ...parsedAnalysisResult.impacts.map((impact) => `영향: ${impact}`),
-        ...parsedAnalysisResult.risks.map((risk) => `리스크: ${risk}`),
-        ...parsedAnalysisResult.recommendations.map((item) => `권장: ${item}`),
-      ].join("\n");
+      if (parsedAnalysisResult.hasExtendedFields) {
+        content = [
+          title,
+          parsedAnalysisResult.summary,
+          parsedAnalysisResult.purpose,
+          parsedAnalysisResult.changeReason,
+          parsedAnalysisResult.before,
+          parsedAnalysisResult.after,
+          ...parsedAnalysisResult.relatedFeatures.map((feature) => `관련 기능: ${feature}`),
+          ...parsedAnalysisResult.affectedRoles.map((role) => `영향 역할: ${role}`),
+          ...parsedAnalysisResult.roleImpacts.map((item) => `${item.role}: ${item.impact}`),
+          ...parsedAnalysisResult.risks.map((risk) => `리스크: ${risk}`),
+          ...parsedAnalysisResult.needsConfirmation.map((item) => `확인 필요: ${item}`),
+          ...parsedAnalysisResult.changes.map((change) => `${change.filePath}: ${change.description}`),
+          ...parsedAnalysisResult.followUpTasks.map((item) => `후속 작업: ${item.task}`),
+        ].filter(Boolean).join("\n");
+      } else {
+        content = [
+          title,
+          parsedAnalysisResult.summary,
+          ...parsedAnalysisResult.changes.map((change) => `${change.filePath}: ${change.description}`),
+          ...parsedAnalysisResult.impacts.map((impact) => `영향: ${impact}`),
+          ...parsedAnalysisResult.risks.map((risk) => `리스크: ${risk}`),
+          ...parsedAnalysisResult.recommendations.map((item) => `권장: ${item}`),
+        ].filter(Boolean).join("\n");
+      }
     }
 
     try {
@@ -550,8 +587,8 @@ export function PullRequestReviewScreen() {
     }
   };
 
-  const toggleFollowUp = (id: string) => {
-    setFollowUps((items) =>
+  const toggleFollowUpTask = (id: string) => {
+    setFollowUpTaskState((items) =>
       items.map((item) =>
         item.id === id ? { ...item, completed: !item.completed } : item,
       ),
@@ -645,8 +682,8 @@ export function PullRequestReviewScreen() {
             <ReviewWorkspace
               analysisResult={parsedAnalysisResult}
               files={pullRequestFiles}
-              followUps={followUps}
-              onToggleFollowUp={toggleFollowUp}
+              followUpTasks={followUpTaskState}
+              onToggleFollowUpTask={toggleFollowUpTask}
               pullRequest={pullRequest}
             />
           ) : isPullRequestRoute && pullRequest && pullRequestFiles ? (
@@ -805,8 +842,8 @@ function ReviewHeader({
 }
 
 type ReviewWorkspaceProps = {
-  followUps: ReviewFollowUp[];
-  onToggleFollowUp: (id: string) => void;
+  followUpTasks: FollowUpTaskState[];
+  onToggleFollowUpTask: (id: string) => void;
   analysisResult?: AnalysisResult | null;
 };
 
@@ -818,8 +855,8 @@ type ReviewWorkspaceDataProps = ReviewWorkspaceProps & {
 function ReviewWorkspace({
   analysisResult,
   files,
-  followUps,
-  onToggleFollowUp,
+  followUpTasks,
+  onToggleFollowUpTask,
   pullRequest,
 }: ReviewWorkspaceDataProps) {
   return (
@@ -828,8 +865,8 @@ function ReviewWorkspace({
       {analysisResult ? (
         <AnalysisResultPanel
           analysisResult={analysisResult}
-          followUps={followUps}
-          onToggleFollowUp={onToggleFollowUp}
+          followUpTasks={followUpTasks}
+          onToggleFollowUpTask={onToggleFollowUpTask}
         />
       ) : (
         <DraftPlaceholderPanel />
@@ -1068,6 +1105,102 @@ function AnalysisRestoreErrorPanel({
   );
 }
 
+function buildEvidenceMap(evidence: AnalysisResultEvidence[]) {
+  return new Map(evidence.filter((item) => item.id).map((item) => [item.id, item]));
+}
+
+function isContextEvidenceWithoutUserFacingInfo(item: AnalysisResultEvidence) {
+  return item.source === "context" && !item.description?.trim();
+}
+
+function EvidenceRefsList({
+  evidenceMap,
+  refs,
+}: {
+  evidenceMap: Map<string, AnalysisResultEvidence>;
+  refs: string[];
+}) {
+  if (refs.length === 0) return null;
+
+  return (
+    <ul className="pull-request-review__evidence-refs">
+      {refs.map((ref) => {
+        const evidence = evidenceMap.get(ref);
+
+        if (evidence) {
+          if (isContextEvidenceWithoutUserFacingInfo(evidence)) {
+            return (
+              <li key={ref}>
+                <strong>{evidence.source}</strong>
+                <span>프로젝트 컨텍스트</span>
+              </li>
+            );
+          }
+
+          return (
+            <li key={ref}>
+              <strong>{evidence.source}</strong>
+              <span>{evidence.location}</span>
+              {evidence.description ? <span>{evidence.description}</span> : null}
+            </li>
+          );
+        }
+
+        return (
+          <li key={ref}>
+            <code>{ref}</code>
+            <span>연결된 근거를 찾을 수 없습니다.</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function AnalysisTextSection({
+  emptyText,
+  id,
+  text,
+  title,
+}: {
+  emptyText?: string;
+  id: string;
+  text: string;
+  title: string;
+}) {
+  return (
+    <section aria-labelledby={id} className="pull-request-review__analysis-summary">
+      <h3 id={id}>{title}</h3>
+      <p>{text || emptyText || "정보가 없습니다."}</p>
+    </section>
+  );
+}
+
+function AnalysisTagSection({
+  emptyText,
+  id,
+  items,
+  title,
+}: {
+  emptyText: string;
+  id: string;
+  items: string[];
+  title: string;
+}) {
+  return (
+    <section aria-labelledby={id} className="pull-request-review__analysis-tags">
+      <h3 id={id}>{title}</h3>
+      {items.length > 0 ? (
+        <ul className="pull-request-review__analysis-tag-list">
+          {items.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      ) : (
+        <p className="pull-request-review__analysis-empty">{emptyText}</p>
+      )}
+    </section>
+  );
+}
+
 function DraftPlaceholderPanel() {
   return (
     <section className="pull-request-review__panel pull-request-review__draft" aria-labelledby="draft-title">
@@ -1085,10 +1218,10 @@ function DraftPlaceholderPanel() {
 
 function AnalysisResultPanel({
   analysisResult,
-  followUps,
-  onToggleFollowUp,
+  followUpTasks,
+  onToggleFollowUpTask,
 }: ReviewWorkspaceProps & { analysisResult: AnalysisResult }) {
-  const { draft } = pullRequestReviewMock;
+  const evidenceMap = buildEvidenceMap(analysisResult.evidence);
   const [showAllChanges, setShowAllChanges] = useState(false);
   const hiddenChangeCount = Math.max(
     analysisResult.changes.length - DEFAULT_VISIBLE_ANALYSIS_CHANGES,
@@ -1097,6 +1230,54 @@ function AnalysisResultPanel({
   const visibleChanges = showAllChanges || hiddenChangeCount === 0
     ? analysisResult.changes
     : analysisResult.changes.slice(0, DEFAULT_VISIBLE_ANALYSIS_CHANGES);
+  const isLegacyResult = !analysisResult.hasExtendedFields;
+  const visibleEvidence = analysisResult.evidence.filter(
+    (item) => !isContextEvidenceWithoutUserFacingInfo(item),
+  );
+
+  const changesSection = (
+    <section
+      aria-labelledby="analysis-changes-title"
+      className="pull-request-review__analysis-changes"
+    >
+      <div className="pull-request-review__analysis-section-heading">
+        <h3 id="analysis-changes-title">변경 파일</h3>
+        {analysisResult.changes.length > 0 ? (
+          <span className="pull-request-review__analysis-count">
+            {analysisResult.changes.length}개
+          </span>
+        ) : null}
+      </div>
+
+      {analysisResult.changes.length > 0 ? (
+        <>
+          <ul className="pull-request-review__analysis-change-list">
+            {visibleChanges.map((change) => (
+              <li key={`${change.filePath}-${change.description}`}>
+                <code>{change.filePath}</code>
+                <span>{change.description}</span>
+              </li>
+            ))}
+          </ul>
+          {hiddenChangeCount > 0 ? (
+            <div className="pull-request-review__analysis-change-controls">
+              {!showAllChanges ? (
+                <Button onClick={() => setShowAllChanges(true)} size="sm" variant="secondary">
+                  전체 변경 파일 {analysisResult.changes.length}개 보기
+                </Button>
+              ) : (
+                <Button onClick={() => setShowAllChanges(false)} size="sm" variant="ghost">
+                  접기
+                </Button>
+              )}
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <p className="pull-request-review__analysis-empty">변경 파일 정보가 없습니다.</p>
+      )}
+    </section>
+  );
 
   return (
     <section
@@ -1108,108 +1289,226 @@ function AnalysisResultPanel({
           <h2 id="analysis-result-title">AI 분석 결과</h2>
           <div className="pull-request-review__analysis-header-meta">
             <Badge variant="success">분석 완료</Badge>
-            <Badge variant="info">{draft.recordType}</Badge>
+            {analysisResult.riskScore !== undefined ? (
+              <Badge variant="warning">리스크 점수 {analysisResult.riskScore}</Badge>
+            ) : null}
           </div>
         </div>
       </header>
 
-      <section
-        aria-labelledby="analysis-summary-title"
-        className="pull-request-review__analysis-summary"
-      >
-        <h3 id="analysis-summary-title">작업 요약</h3>
-        <p>{analysisResult.summary || "요약 정보가 없습니다."}</p>
-      </section>
+      {isLegacyResult ? (
+        <>
+          <p className="pull-request-review__legacy-notice" role="status">
+            이 분석은 이전 형식으로 생성된 결과입니다. 상세 분석 항목은 제공되지 않습니다.
+          </p>
 
-      <section aria-label="분석 인사이트" className="pull-request-review__analysis-insights">
-        <AnalysisInsightCard
-          count={analysisResult.impacts.length}
-          emptyText="영향 정보가 없습니다."
-          items={analysisResult.impacts}
-          title="영향"
-          variant="impact"
-        />
-        <AnalysisInsightCard
-          count={analysisResult.risks.length}
-          emptyText="식별된 리스크가 없습니다."
-          items={analysisResult.risks}
-          title="리스크"
-          variant="risk"
-        />
-        <AnalysisInsightCard
-          count={analysisResult.recommendations.length}
-          emptyText="권장 사항이 없습니다."
-          items={analysisResult.recommendations}
-          title="권장 사항"
-          variant="recommendation"
-        />
-      </section>
+          <AnalysisTextSection
+            id="analysis-summary-title"
+            text={analysisResult.summary}
+            title="작업 요약"
+          />
 
-      <section
-        aria-labelledby="analysis-changes-title"
-        className="pull-request-review__analysis-changes"
-      >
-        <div className="pull-request-review__analysis-section-heading">
-          <h3 id="analysis-changes-title">변경 파일</h3>
-          {analysisResult.changes.length > 0 ? (
-            <span className="pull-request-review__analysis-count">
-              {analysisResult.changes.length}개
-            </span>
+          <section aria-label="분석 인사이트" className="pull-request-review__analysis-insights">
+            <AnalysisInsightCard
+              count={analysisResult.impacts.length}
+              emptyText="영향 정보가 없습니다."
+              items={analysisResult.impacts}
+              title="영향"
+              variant="impact"
+            />
+            <AnalysisInsightCard
+              count={analysisResult.risks.length}
+              emptyText="식별된 리스크가 없습니다."
+              items={analysisResult.risks}
+              title="리스크"
+              variant="risk"
+            />
+            <AnalysisInsightCard
+              count={analysisResult.recommendations.length}
+              emptyText="권장 사항이 없습니다."
+              items={analysisResult.recommendations}
+              title="권장 사항"
+              variant="recommendation"
+            />
+          </section>
+
+          {changesSection}
+        </>
+      ) : (
+        <>
+          {analysisResult.retrievalQualityWarning ? (
+            <p className="pull-request-review__retrieval-warning" role="status">
+              검색된 프로젝트 근거의 품질 확인이 필요합니다.
+            </p>
           ) : null}
-        </div>
 
-        {analysisResult.changes.length > 0 ? (
-          <>
-            <ul className="pull-request-review__analysis-change-list">
-              {visibleChanges.map((change) => (
-                <li key={`${change.filePath}-${change.description}`}>
-                  <code>{change.filePath}</code>
-                  <span>{change.description}</span>
-                </li>
-              ))}
-            </ul>
-            {hiddenChangeCount > 0 ? (
-              <div className="pull-request-review__analysis-change-controls">
-                {!showAllChanges ? (
-                  <Button onClick={() => setShowAllChanges(true)} size="sm" variant="secondary">
-                    전체 변경 파일 {analysisResult.changes.length}개 보기
-                  </Button>
-                ) : (
-                  <Button onClick={() => setShowAllChanges(false)} size="sm" variant="ghost">
-                    접기
-                  </Button>
-                )}
-              </div>
-            ) : null}
-          </>
-        ) : (
-          <p className="pull-request-review__analysis-empty">변경 파일 정보가 없습니다.</p>
-        )}
-      </section>
+          <AnalysisTextSection
+            emptyText="요약 정보가 없습니다."
+            id="analysis-summary-title"
+            text={analysisResult.summary}
+            title="작업 요약"
+          />
 
-      <section
-        aria-labelledby="analysis-follow-ups-title"
-        className="pull-request-review__analysis-follow-ups"
-      >
-        <h3 id="analysis-follow-ups-title">후속 작업</h3>
-        <p className="pull-request-review__analysis-follow-ups-note">
-          프로젝트 기록 승인 전 로컬 체크리스트입니다.
-        </p>
-        <div className="pull-request-review__follow-ups">
-          {followUps.map((item) => (
-            <button
-              aria-label={`${item.label} ${item.completed ? "완료 해제" : "완료 처리"}`}
-              aria-pressed={item.completed}
-              key={item.id}
-              onClick={() => onToggleFollowUp(item.id)}
-              type="button"
-            >
-              <span aria-hidden="true">{item.completed ? "☑" : "☐"}</span>
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </section>
+          <AnalysisTextSection
+            emptyText="작업 목적 정보가 없습니다."
+            id="analysis-purpose-title"
+            text={analysisResult.purpose}
+            title="작업 목적"
+          />
+
+          <AnalysisTextSection
+            emptyText="변경 이유 정보가 없습니다."
+            id="analysis-change-reason-title"
+            text={analysisResult.changeReason}
+            title="변경 이유"
+          />
+
+          <section aria-labelledby="analysis-diff-title" className="pull-request-review__analysis-diff">
+            <h3 id="analysis-diff-title">변경 전 / 변경 후</h3>
+            <div className="pull-request-review__analysis-diff-grid">
+              <article>
+                <h4>변경 전</h4>
+                <p>{analysisResult.before || "정보가 없습니다."}</p>
+              </article>
+              <article>
+                <h4>변경 후</h4>
+                <p>{analysisResult.after || "정보가 없습니다."}</p>
+              </article>
+            </div>
+          </section>
+
+          <AnalysisTagSection
+            emptyText="관련 기능 정보가 없습니다."
+            id="analysis-related-features-title"
+            items={analysisResult.relatedFeatures}
+            title="관련 기능"
+          />
+
+          <AnalysisTagSection
+            emptyText="영향 역할 정보가 없습니다."
+            id="analysis-affected-roles-title"
+            items={analysisResult.affectedRoles}
+            title="영향 역할"
+          />
+
+          <section
+            aria-labelledby="analysis-role-impacts-title"
+            className="pull-request-review__analysis-role-impacts"
+          >
+            <h3 id="analysis-role-impacts-title">역할별 영향</h3>
+            {analysisResult.roleImpacts.length > 0 ? (
+              <ul className="pull-request-review__role-impact-list">
+                {analysisResult.roleImpacts.map((item, index) => (
+                  <li key={`${item.role}-${index}`}>
+                    <div className="pull-request-review__role-impact-header">
+                      <strong>{item.role || "역할 미지정"}</strong>
+                      <span>{item.impact}</span>
+                    </div>
+                    {item.basis ? (
+                      <p className="pull-request-review__role-impact-basis">근거 · {item.basis}</p>
+                    ) : null}
+                    <EvidenceRefsList evidenceMap={evidenceMap} refs={item.evidenceRefs} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="pull-request-review__analysis-empty">역할별 영향 정보가 없습니다.</p>
+            )}
+          </section>
+
+          <section
+            aria-labelledby="analysis-risks-title"
+            className="pull-request-review__analysis-confirmation"
+          >
+            <h3 id="analysis-risks-title">리스크</h3>
+            {analysisResult.risks.length > 0 ? (
+              <ul className="pull-request-review__insight-list">
+                {analysisResult.risks.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            ) : (
+              <p className="pull-request-review__analysis-empty">
+                {analysisResult.hasRisksField
+                  ? "식별된 리스크가 없습니다."
+                  : "리스크 상세가 분석 결과에 제공되지 않았습니다."}
+              </p>
+            )}
+          </section>
+
+          <section
+            aria-labelledby="analysis-confirmation-title"
+            className="pull-request-review__analysis-confirmation"
+          >
+            <h3 id="analysis-confirmation-title">확인 필요 사항</h3>
+            {analysisResult.needsConfirmation.length > 0 ? (
+              <ul className="pull-request-review__insight-list">
+                {analysisResult.needsConfirmation.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            ) : (
+              <p className="pull-request-review__analysis-empty">확인이 필요한 사항이 없습니다.</p>
+            )}
+          </section>
+
+          {changesSection}
+
+          <section
+            aria-labelledby="analysis-follow-ups-title"
+            className="pull-request-review__analysis-follow-ups"
+          >
+            <h3 id="analysis-follow-ups-title">후속 작업</h3>
+            {followUpTasks.length > 0 ? (
+              <>
+                <p className="pull-request-review__analysis-follow-ups-note">
+                  프로젝트 기록 승인 전 로컬 체크리스트입니다.
+                </p>
+                <div className="pull-request-review__follow-ups">
+                  {followUpTasks.map((item) => (
+                    <div className="pull-request-review__follow-up-item" key={item.id}>
+                      <button
+                        aria-label={`${item.task} ${item.completed ? "완료 해제" : "완료 처리"}`}
+                        aria-pressed={item.completed}
+                        onClick={() => onToggleFollowUpTask(item.id)}
+                        type="button"
+                      >
+                        <span aria-hidden="true">{item.completed ? "☑" : "☐"}</span>
+                        {item.role ? (
+                          <span className="pull-request-review__follow-up-role">{item.role}</span>
+                        ) : null}
+                        {item.task}
+                      </button>
+                      <EvidenceRefsList evidenceMap={evidenceMap} refs={item.evidenceRefs} />
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="pull-request-review__analysis-empty">후속 작업이 없습니다.</p>
+            )}
+          </section>
+
+          <section
+            aria-labelledby="analysis-evidence-title"
+            className="pull-request-review__analysis-evidence"
+          >
+            <h3 id="analysis-evidence-title">분석 근거</h3>
+            {visibleEvidence.length > 0 ? (
+              <ul className="pull-request-review__evidence-list">
+                {visibleEvidence.map((item) => (
+                  <li key={item.id || `${item.source}-${item.location}`}>
+                    <div className="pull-request-review__evidence-item-header">
+                      <strong>{item.source}</strong>
+                      {item.id ? <code>{item.id}</code> : null}
+                    </div>
+                    <p>{item.location}</p>
+                    {item.description ? <p>{item.description}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="pull-request-review__analysis-empty">표시할 분석 근거가 없습니다.</p>
+            )}
+          </section>
+        </>
+      )}
     </section>
   );
 }
@@ -1355,7 +1654,9 @@ function ApprovedPanel({
   projectId: string;
   pullRequest?: PullRequestDetail;
 }) {
-  const { approval } = pullRequestReviewMock;
+  const roleSummary = analysisResult?.affectedRoles.length
+    ? analysisResult.affectedRoles.join(" / ")
+    : analysisResult?.impacts.join(" / ");
 
   return (
     <section aria-labelledby="analysis-state-title" className="pull-request-review__state-panel">
@@ -1364,10 +1665,7 @@ function ApprovedPanel({
       <p>검토한 내용이 공식 프로젝트 메모리에 저장되었습니다.</p>
       <article className="pull-request-review__approved-summary">
         <h3>{pullRequest?.title ?? analysisResult?.summary ?? "승인된 기록"}</h3>
-        <p>승인자 · {approval.approver} · {approval.approvedAt}</p>
-        {analysisResult && analysisResult.impacts.length > 0 ? (
-          <p>영향 · {analysisResult.impacts.join(" / ")}</p>
-        ) : null}
+        {roleSummary ? <p>영향 · {roleSummary}</p> : null}
       </article>
       <div className="pull-request-review__state-actions">
         <Link className="ui-button ui-button--primary ui-button--md" to={`/projects/${projectId}/records`}>
