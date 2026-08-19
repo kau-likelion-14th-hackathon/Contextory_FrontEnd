@@ -11,6 +11,7 @@ import {
   canManageAnalysisMemory,
   getAnalysis,
   getAnalysisApiErrorCode,
+  getAnalysisFeedbackMessage,
   getLatestAnalysisByPrNumber,
   isActiveAnalysisStatus,
   mapAnalysisRecordResponse,
@@ -101,23 +102,6 @@ function classifySourceError(error: unknown): PullRequestSourceState {
   }
   if (code === "GITHUB_4041") return "not-found";
   return "error";
-}
-
-function getAnalysisFeedbackMessage(error: unknown, fallback: string) {
-  const code = getAnalysisApiErrorCode(error);
-  if (code === "AI_ANALYSIS_4041") return "요청한 AI 분석을 찾을 수 없습니다.";
-  if (code === "AI_ANALYSIS_4001") return "분석을 요청할 수 없는 상태입니다.";
-  if (code === "AI_ANALYSIS_4031") return "이 분석에 접근할 권한이 없습니다.";
-  if (code === "AI_ANALYSIS_5031") return "AI 분석 서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해주세요.";
-  if (code === "PROJECT_RECORD_4041") return "등록할 프로젝트 기록을 찾을 수 없습니다.";
-  if (code === "PROJECT_RECORD_4001") return "승인된 분석만 프로젝트 메모리에 등록할 수 있습니다.";
-  if (code === "PROJECT_RECORD_4031" || code === "PROJECT_4032") {
-    return "프로젝트 메모리를 등록할 권한이 없습니다. OWNER 또는 ADMIN만 등록할 수 있습니다.";
-  }
-  if (code?.startsWith("PROJECT_RECORD_")) {
-    return getApiErrorMessage(error, "프로젝트 메모리 등록에 실패했습니다.");
-  }
-  return getApiErrorMessage(error, fallback);
 }
 
 function formatPullRequestDate(value: string) {

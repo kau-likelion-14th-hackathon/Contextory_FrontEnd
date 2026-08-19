@@ -1,4 +1,4 @@
-import { ApiError, requestApiResult } from "../../shared/api/client";
+import { ApiError, getApiErrorMessage, requestApiResult } from "../../shared/api/client";
 
 export type AnalysisStatus =
   | "PENDING"
@@ -332,6 +332,29 @@ export function getAnalysisApiErrorCode(error: unknown) {
   if (!error.bodyJson || typeof error.bodyJson !== "object") return undefined;
   if (!("code" in error.bodyJson) || typeof error.bodyJson.code !== "string") return undefined;
   return error.bodyJson.code;
+}
+
+export function getAnalysisFeedbackMessage(error: unknown, fallback: string) {
+  const code = getAnalysisApiErrorCode(error);
+  if (code === "AI_ANALYSIS_4041") return "요청한 AI 분석을 찾을 수 없습니다.";
+  if (code === "AI_ANALYSIS_4001") return "분석을 요청할 수 없는 상태입니다.";
+  if (code === "AI_ANALYSIS_4031") return "이 분석에 접근할 권한이 없습니다.";
+  if (code === "AI_ANALYSIS_5031") {
+    return "AI 분석 서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해주세요.";
+  }
+  if (code === "PROJECT_RECORD_4001") {
+    return "완료된 AI 분석만 수정하거나 승인할 수 있습니다.";
+  }
+  if (code === "PROJECT_RECORD_4002") return "저장할 AI 분석 결과가 없습니다.";
+  if (code === "PROJECT_RECORD_4003") {
+    return "승인된 AI 분석 기록만 프로젝트 메모리에 등록할 수 있습니다.";
+  }
+  if (code === "PROJECT_RECORD_4031") return "해당 AI 분석 결과를 수정할 권한이 없습니다.";
+  if (code === "PROJECT_RECORD_4091") return "이미 승인된 기록은 수정할 수 없습니다.";
+  if (code === "PROJECT_4032") {
+    return "프로젝트 메모리를 등록할 권한이 없습니다. OWNER 또는 ADMIN만 등록할 수 있습니다.";
+  }
+  return getApiErrorMessage(error, fallback);
 }
 
 export function canEditAnalysisRecord(
