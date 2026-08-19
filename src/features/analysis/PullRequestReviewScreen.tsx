@@ -7,6 +7,7 @@ import {
   cancelAnalysis,
   getAnalysis,
   getAnalysisApiErrorCode,
+  getLatestAnalysisByPrNumber,
   isActiveAnalysisStatus,
   parseAnalysisResult,
   requestAnalysis,
@@ -279,8 +280,28 @@ export function PullRequestReviewScreen() {
       getPullRequest(projectId, validPullRequestId, controller.signal),
       getPullRequestFiles(projectId, validPullRequestId, controller.signal),
     ])
-      .then(([detail, files]) => {
+      .then(async ([detail, files]) => {
         if (controller.signal.aborted) return;
+
+        try {
+          const latestAnalysis = await getLatestAnalysisByPrNumber(
+            projectId,
+            detail.prNumber,
+            controller.signal,
+          );
+          if (controller.signal.aborted) return;
+
+          if (latestAnalysis?.analysisId) {
+            navigate(
+              `/projects/${projectId}/analyses/${latestAnalysis.analysisId}`,
+              { replace: true },
+            );
+            return;
+          }
+        } catch {
+          if (controller.signal.aborted) return;
+        }
+
         setPullRequest(detail);
         setPullRequestFiles(files);
         setSourceState("success");
@@ -294,7 +315,7 @@ export function PullRequestReviewScreen() {
       });
 
     return () => controller.abort();
-  }, [isPullRequestRoute, projectId, sourceRetryKey, validPullRequestId]);
+  }, [isPullRequestRoute, navigate, projectId, sourceRetryKey, validPullRequestId]);
 
   useEffect(() => {
     if (!isAnalysisRoute) return;
