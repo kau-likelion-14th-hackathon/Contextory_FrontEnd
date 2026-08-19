@@ -7,6 +7,7 @@ import {
   cancelAnalysis,
   getAnalysis,
   getAnalysisApiErrorCode,
+  getLatestAnalysisByPrNumber,
   isActiveAnalysisStatus,
   parseAnalysisResult,
   requestAnalysis,
@@ -52,6 +53,8 @@ type PullRequestSourceState =
   | "error";
 
 type AnalysisLoadState = "loading" | "success" | "invalid" | "not-found" | "error";
+
+type AnalysisRestoreState = "idle" | "loading" | "ready" | "error";
 
 function classifySourceError(error: unknown): PullRequestSourceState {
   const code = getPullRequestApiErrorCode(error);
@@ -237,6 +240,9 @@ export function PullRequestReviewScreen() {
   const [pullRequest, setPullRequest] = useState<PullRequestDetail>();
   const [pullRequestFiles, setPullRequestFiles] = useState<PullRequestFilesResponse>();
   const [sourceRetryKey, setSourceRetryKey] = useState(0);
+  const [analysisRestoreState, setAnalysisRestoreState] = useState<AnalysisRestoreState>("idle");
+  const [analysisRestoreError, setAnalysisRestoreError] = useState("");
+  const [analysisRestoreRetryKey, setAnalysisRestoreRetryKey] = useState(0);
   const [analysis, setAnalysis] = useState<AnalysisDetail>();
   const [analysisLoadState, setAnalysisLoadState] = useState<AnalysisLoadState>("loading");
   const [analysisError, setAnalysisError] = useState("");
@@ -268,12 +274,16 @@ export function PullRequestReviewScreen() {
       setSourceState("invalid");
       setPullRequest(undefined);
       setPullRequestFiles(undefined);
+      setAnalysisRestoreState("idle");
+      setAnalysisRestoreError("");
       return;
     }
 
     const controller = new AbortController();
     setSourceState("loading");
     setSourceError("");
+    setAnalysisRestoreState("idle");
+    setAnalysisRestoreError("");
 
     void Promise.all([
       getPullRequest(projectId, validPullRequestId, controller.signal),
@@ -284,6 +294,8 @@ export function PullRequestReviewScreen() {
         setPullRequest(detail);
         setPullRequestFiles(files);
         setSourceState("success");
+        setAnalysisRestoreState("loading");
+        setAnalysisRestoreError("");
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
@@ -291,10 +303,52 @@ export function PullRequestReviewScreen() {
         setPullRequestFiles(undefined);
         setSourceState(classifySourceError(error));
         setSourceError(getApiErrorMessage(error, "Pull Request 원본 정보를 불러오지 못했습니다."));
+        setAnalysisRestoreState("idle");
+        setAnalysisRestoreError("");
       });
 
     return () => controller.abort();
   }, [isPullRequestRoute, projectId, sourceRetryKey, validPullRequestId]);
+
+  useEffect(() => {
+    if (!isPullRequestRoute) return;
+    if (sourceState !== "success" || !pullRequest) return;
+
+    const controller = new AbortController();
+    setAnalysisRestoreState("loading");
+    setAnalysisRestoreError("");
+
+    void getLatestAnalysisByPrNumber(projectId, pullRequest.prNumber, controller.signal)
+      .then((latestAnalysis) => {
+        if (controller.signal.aborted) return;
+
+        if (latestAnalysis?.analysisId) {
+          navigate(
+            `/projects/${projectId}/analyses/${latestAnalysis.analysisId}`,
+            { replace: true },
+          );
+          return;
+        }
+
+        setAnalysisRestoreState("ready");
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setAnalysisRestoreState("error");
+        setAnalysisRestoreError(
+          getAnalysisFeedbackMessage(error, "기존 AI 분석을 확인하지 못했습니다."),
+        );
+      });
+
+    return () => controller.abort();
+  }, [
+    analysisRestoreRetryKey,
+    isPullRequestRoute,
+    navigate,
+    projectId,
+    pullRequest,
+    sourceState,
+  ]);
 
   useEffect(() => {
     if (!isAnalysisRoute) return;
@@ -555,6 +609,7 @@ export function PullRequestReviewScreen() {
             analysisRequesting={analysisRequesting}
             analysisStatus={isAnalysisRoute ? analysis?.analysisStatus : undefined}
             isApprovedView={isApprovedView}
+            canRequestAnalysis={!isPullRequestRoute || analysisRestoreState === "ready"}
             onAnalyze={startAnalysis}
             onApprove={approveReview}
             pullRequest={pullRequest}
@@ -595,12 +650,19 @@ export function PullRequestReviewScreen() {
               pullRequest={pullRequest}
             />
           ) : isPullRequestRoute && pullRequest && pullRequestFiles ? (
-            <ReviewWorkspace
-              files={pullRequestFiles}
-              followUps={followUps}
-              onToggleFollowUp={toggleFollowUp}
-              pullRequest={pullRequest}
-            />
+            <div className="pull-request-review__columns">
+              <GitHubSourcePanel files={pullRequestFiles} pullRequest={pullRequest} />
+              {analysisRestoreState === "error" ? (
+                <AnalysisRestoreErrorPanel
+                  errorMessage={analysisRestoreError}
+                  onRetry={() => setAnalysisRestoreRetryKey((key) => key + 1)}
+                />
+              ) : analysisRestoreState === "ready" ? (
+                <DraftPlaceholderPanel />
+              ) : (
+                <AnalysisRestoreLoadingPanel />
+              )}
+            </div>
           ) : null}
 
           {showFooterActions ? (
@@ -658,6 +720,7 @@ type ReviewHeaderProps = {
   analysisId?: string;
   analysisStatus?: AnalysisStatus;
   analysisRequesting: boolean;
+  canRequestAnalysis?: boolean;
   isApprovedView: boolean;
   pullRequest?: PullRequestDetail;
   onAnalyze: () => void;
@@ -668,6 +731,7 @@ function ReviewHeader({
   analysisId,
   analysisRequesting,
   analysisStatus,
+  canRequestAnalysis = true,
   isApprovedView,
   onAnalyze,
   onApprove,
@@ -680,6 +744,7 @@ function ReviewHeader({
       ? analysisStatusCopy[analysisStatus]
       : { label: "검토 필요", variant: "warning" as const };
   const analyzeDisabled = analysisRequesting
+    || !canRequestAnalysis
     || (analysisStatus ? isActiveAnalysisStatus(analysisStatus) : false);
 
   return (
@@ -954,6 +1019,51 @@ function GitHubSourcePanel({
           </div>
         ) : null}
       </section>
+    </section>
+  );
+}
+
+function AnalysisRestoreLoadingPanel() {
+  return (
+    <section
+      aria-labelledby="analysis-restore-title"
+      aria-live="polite"
+      className="pull-request-review__panel pull-request-review__draft"
+      role="status"
+    >
+      <header>
+        <h2 id="analysis-restore-title">프로젝트 기록 초안 (AI 분석 결과)</h2>
+        <Badge variant="info">확인 중</Badge>
+      </header>
+      <div className="pull-request-review__draft-empty">
+        <p>이 Pull Request의 기존 AI 분석을 확인하고 있습니다.</p>
+      </div>
+    </section>
+  );
+}
+
+function AnalysisRestoreErrorPanel({
+  errorMessage,
+  onRetry,
+}: {
+  errorMessage: string;
+  onRetry: () => void;
+}) {
+  return (
+    <section
+      aria-labelledby="analysis-restore-title"
+      className="pull-request-review__panel pull-request-review__draft"
+      role="alert"
+    >
+      <header>
+        <h2 id="analysis-restore-title">프로젝트 기록 초안 (AI 분석 결과)</h2>
+        <Badge variant="danger">조회 실패</Badge>
+      </header>
+      <div className="pull-request-review__draft-empty">
+        <p>기존 AI 분석 이력을 불러오지 못했습니다. 새 분석을 요청하기 전에 다시 시도해주세요.</p>
+        {errorMessage ? <p>{errorMessage}</p> : null}
+        <Button onClick={onRetry} size="sm">다시 시도</Button>
+      </div>
     </section>
   );
 }

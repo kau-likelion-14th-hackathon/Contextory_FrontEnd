@@ -42,6 +42,37 @@ export type AnalysisCancelResponse = {
   analysisStatus: AnalysisStatus;
 };
 
+export type AnalysisRequestedBy = {
+  userId: number;
+  username: string;
+};
+
+export type AnalysisSummary = {
+  analysisId: number;
+  prNumber: number;
+  analyzedHeadSha: string | null;
+  analysisStatus: AnalysisStatus;
+  modelName: string | null;
+  requestedBy: AnalysisRequestedBy;
+  requestedAt: string;
+  completedAt: string | null;
+};
+
+export type AnalysisListResponse = {
+  content: AnalysisSummary[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  hasNext: boolean;
+};
+
+export type GetAnalysesParams = {
+  prNumber: number;
+  page?: number;
+  size?: number;
+};
+
 export type AnalysisResultChange = {
   filePath: string;
   description: string;
@@ -123,6 +154,32 @@ export function getAnalysis(
     `/api/projects/${encodeURIComponent(projectId)}/analyses/${encodeURIComponent(analysisId)}`,
     { method: "GET", signal },
   );
+}
+
+export function getAnalyses(
+  projectId: string | number,
+  { prNumber, page = 0, size = 1 }: GetAnalysesParams,
+  signal?: AbortSignal,
+) {
+  const searchParams = new URLSearchParams({
+    prNumber: String(prNumber),
+    page: String(page),
+    size: String(size),
+  });
+
+  return requestApiResult<AnalysisListResponse>(
+    `/api/projects/${encodeURIComponent(projectId)}/analyses?${searchParams}`,
+    { method: "GET", signal },
+  );
+}
+
+export async function getLatestAnalysisByPrNumber(
+  projectId: string | number,
+  prNumber: number,
+  signal?: AbortSignal,
+) {
+  const result = await getAnalyses(projectId, { prNumber, page: 0, size: 1 }, signal);
+  return result.content[0] ?? null;
 }
 
 export function retryAnalysis(

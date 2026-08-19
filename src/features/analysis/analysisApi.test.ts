@@ -16,6 +16,20 @@ function apiResponse(result: unknown) {
   return Response.json({ code: "SUCCESS", isSuccess: true, message: "success", result });
 }
 
+function analysisListItem(overrides: Record<string, unknown> = {}) {
+  return {
+    analysisId: 12,
+    analysisStatus: "COMPLETED",
+    analyzedHeadSha: "abc123",
+    completedAt: "2026-08-17T01:00:00Z",
+    modelName: "gpt-4",
+    prNumber: 128,
+    requestedAt: "2026-08-17T00:00:00Z",
+    requestedBy: { userId: 1, username: "dev" },
+    ...overrides,
+  };
+}
+
 describe("Analysis API", () => {
   it("requests analysis with prNumber in POST body", async () => {
     const result = {
@@ -39,6 +53,80 @@ describe("Analysis API", () => {
         body: JSON.stringify({ prNumber: 128 }),
       }),
     );
+  });
+
+  it("gets analyses with prNumber page and size query", async () => {
+    const item = analysisListItem();
+    const result = {
+      content: [item],
+      hasNext: false,
+      page: 0,
+      size: 1,
+      totalElements: 1,
+      totalPages: 1,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(apiResponse(result));
+    vi.stubGlobal("fetch", fetchMock);
+    const { getAnalyses } = await loadAnalysisApi();
+    const controller = new AbortController();
+
+    await expect(getAnalyses("39", { prNumber: 128, page: 0, size: 1 }, controller.signal)).resolves.toEqual(result);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.test/api/projects/39/analyses?prNumber=128&page=0&size=1",
+      expect.objectContaining({ method: "GET", signal: controller.signal }),
+    );
+  });
+
+  it("returns the latest analysis summary for a PR number", async () => {
+    const summary = analysisListItem({
+      analysisId: 15,
+      analysisStatus: "PROCESSING",
+      analyzedHeadSha: null,
+      completedAt: null,
+      modelName: null,
+    });
+    const fetchMock = vi.fn().mockResolvedValue(apiResponse({
+      content: [summary],
+      hasNext: false,
+      page: 0,
+      size: 1,
+      totalElements: 1,
+      totalPages: 1,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { getLatestAnalysisByPrNumber } = await loadAnalysisApi();
+
+    await expect(getLatestAnalysisByPrNumber(39, 128)).resolves.toEqual(summary);
+  });
+
+  it("returns null when no analysis exists for a PR number", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(apiResponse({
+      content: [],
+      hasNext: false,
+      page: 0,
+      size: 1,
+      totalElements: 0,
+      totalPages: 0,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { getLatestAnalysisByPrNumber } = await loadAnalysisApi();
+
+    await expect(getLatestAnalysisByPrNumber(39, 128)).resolves.toBeNull();
+  });
+
+  it("throws when analyses list request fails instead of returning null", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("upstream unavailable", {
+        status: 502,
+        headers: { "Content-Type": "text/plain" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { getLatestAnalysisByPrNumber } = await loadAnalysisApi();
+
+    await expect(getLatestAnalysisByPrNumber(39, 128)).rejects.toMatchObject({
+      status: 502,
+    });
   });
 
   it("gets analysis detail from the analysis URL and forwards AbortSignal", async () => {
