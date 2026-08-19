@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../shared/api/client";
 import { PageContainer } from "../../shared/layouts";
-import { Badge, Button, EmptyState, ErrorState, LoadingState, Modal } from "../../shared/ui";
+import { Badge, Button, EmptyState, ErrorState, LoadingState } from "../../shared/ui";
 import {
+  approveAnalysis,
   cancelAnalysis,
+  canApproveAnalysisRecord,
   getAnalysis,
   getAnalysisApiErrorCode,
   getLatestAnalysisByPrNumber,
@@ -12,7 +14,11 @@ import {
   parseAnalysisResult,
   requestAnalysis,
   retryAnalysis,
+  serializeAnalysisResultForApi,
+  updateAnalysis,
   type AnalysisDetail,
+  type AnalysisRecordResponse,
+  type AnalysisRecordStatus,
   type AnalysisResult,
   type AnalysisResultEvidence,
   type AnalysisStatus,
@@ -24,6 +30,17 @@ import {
   type PullRequestDetail,
   type PullRequestFilesResponse,
 } from "../github/pullRequestApi";
+import {
+  ANALYSIS_APPROVED_COPY,
+  canApproveAnalysisWhileEditing,
+  canEnterAnalysisEditMode,
+  canRequestAnalysisAction,
+  canSaveAnalysisEditDraft,
+  commitAnalysisEditDraft,
+  createAnalysisEditDraft,
+  withDraftStringField,
+  withDraftStringList,
+} from "./analysisEditDraft";
 import "./PullRequestReviewScreen.css";
 
 const POLLING_INTERVAL_MS = 2000;
@@ -52,6 +69,13 @@ type PullRequestSourceState =
 type AnalysisLoadState = "loading" | "success" | "invalid" | "not-found" | "error";
 
 type AnalysisRestoreState = "idle" | "loading" | "ready" | "error";
+
+/** GET analysis에 record 정보가 붙기 전까지 세션 내 수정/승인 결과만 보관한다. */
+type AnalysisRecordState = {
+  recordStatus: AnalysisRecordStatus;
+  recordId: number | null;
+  approvedAt: string | null;
+};
 
 type FollowUpTaskState = {
   id: string;
@@ -230,13 +254,13 @@ function AnalysisFeedback({
 
 export function PullRequestReviewScreen() {
   const { projectId = "", pullRequestId, analysisId } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const queryState = searchParams.get("state");
-  const isApprovedView = queryState === "approved";
-  const [discardOpen, setDiscardOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [analysisRequesting, setAnalysisRequesting] = useState(false);
   const [analysisActionPending, setAnalysisActionPending] = useState(false);
+  const [recordActionPending, setRecordActionPending] = useState(false);
+  const [analysisRecord, setAnalysisRecord] = useState<AnalysisRecordState | null>(null);
+  const [isEditingResult, setIsEditingResult] = useState(false);
+  const [editDraft, setEditDraft] = useState<AnalysisResult | null>(null);
   const [followUpTaskState, setFollowUpTaskState] = useState<FollowUpTaskState[]>([]);
   const [sourceState, setSourceState] = useState<PullRequestSourceState>("loading");
   const [sourceError, setSourceError] = useState("");
@@ -266,9 +290,43 @@ export function PullRequestReviewScreen() {
     : null;
   const analysisStatus = analysis?.analysisStatus;
   const isAnalysisInProgress = analysisStatus ? isActiveAnalysisStatus(analysisStatus) : false;
+  const isApprovedView = analysisRecord?.recordStatus === "APPROVED";
   const canShowCompletedWorkspace = isAnalysisRoute
     && analysisStatus === "COMPLETED"
     && !isApprovedView;
+  const displayedAnalysisResult = isEditingResult && editDraft
+    ? editDraft
+    : parsedAnalysisResult;
+  const canStartEditing = canEnterAnalysisEditMode({
+    analysisStatus,
+    recordStatus: analysisRecord?.recordStatus,
+    isEditing: isEditingResult,
+    pending: recordActionPending,
+  }) && Boolean(parsedAnalysisResult);
+  const canSaveRecord = canSaveAnalysisEditDraft({
+    isEditing: isEditingResult,
+    original: parsedAnalysisResult,
+    draft: editDraft,
+    pending: recordActionPending,
+    recordStatus: analysisRecord?.recordStatus,
+  }) && Boolean(validAnalysisId);
+  const canApproveRecord = canApproveAnalysisRecord(analysisRecord?.recordStatus, recordActionPending)
+    && canApproveAnalysisWhileEditing(isEditingResult)
+    && Boolean(validAnalysisId)
+    && analysisStatus === "COMPLETED";
+  const canRequestAnalysis = (
+    !isPullRequestRoute || analysisRestoreState === "ready"
+  ) && canRequestAnalysisAction({
+    isEditing: isEditingResult,
+    recordActionPending,
+  });
+
+  useEffect(() => {
+    setAnalysisRecord(null);
+    setRecordActionPending(false);
+    setIsEditingResult(false);
+    setEditDraft(null);
+  }, [validAnalysisId]);
 
   useEffect(() => {
     const tasks = analysis?.analysisResult
@@ -468,16 +526,26 @@ export function PullRequestReviewScreen() {
     return () => controller.abort();
   }, [analysisPrNumber, isAnalysisRoute, projectId, sourceRetryKey]);
 
-  const setApprovedView = (options?: { replace?: boolean }) => {
-    setSearchParams((currentParams) => {
-      const nextParams = new URLSearchParams(currentParams);
-      nextParams.set("state", "approved");
-      return nextParams;
-    }, { replace: options?.replace });
+  const applyRecordResponse = (response: AnalysisRecordResponse) => {
+    setAnalysisRecord({
+      recordStatus: response.recordStatus,
+      recordId: typeof response.recordId === "number" ? response.recordId : null,
+      approvedAt: response.approvedAt ?? null,
+    });
+
+    if (response.analysisResult != null) {
+      setAnalysis((current) => (
+        current
+          ? { ...current, analysisResult: response.analysisResult }
+          : current
+      ));
+    }
   };
 
   const requestNewAnalysis = async (prNumber: number) => {
     if (analysisRequesting) return;
+    if (recordActionPending) return;
+    if (isEditingResult) return;
 
     setAnalysisRequesting(true);
     setFeedback("");
@@ -534,13 +602,76 @@ export function PullRequestReviewScreen() {
     }
   };
 
-  const approveReview = () => {
+  const startEditingResult = () => {
+    if (!parsedAnalysisResult || !canStartEditing) return;
+    setEditDraft(createAnalysisEditDraft(parsedAnalysisResult));
+    setIsEditingResult(true);
     setFeedback("");
-    setApprovedView();
   };
 
-  const saveDraft = () => {
-    setFeedback("임시 저장이 완료되었습니다.");
+  const cancelEditingResult = () => {
+    if (recordActionPending) return;
+    setEditDraft(null);
+    setIsEditingResult(false);
+    setFeedback("편집을 취소했습니다.");
+  };
+
+  const updateEditDraft = (updater: (current: AnalysisResult) => AnalysisResult) => {
+    setEditDraft((current) => (current ? updater(current) : current));
+  };
+
+  const saveDraft = async () => {
+    if (!validAnalysisId || !canSaveRecord) return;
+    if (!isEditingResult || !editDraft) {
+      setFeedback("수정 모드에서 내용을 변경한 뒤 저장할 수 있습니다.");
+      return;
+    }
+
+    setRecordActionPending(true);
+    setFeedback("");
+
+    try {
+      const committed = commitAnalysisEditDraft(editDraft);
+      const response = await updateAnalysis(
+        projectId,
+        validAnalysisId,
+        serializeAnalysisResultForApi(committed),
+      );
+      applyRecordResponse(response);
+      setIsEditingResult(false);
+      setEditDraft(null);
+      setFeedback("임시 저장이 완료되었습니다.");
+    } catch (error: unknown) {
+      setFeedback(getAnalysisFeedbackMessage(error, "분석 결과 저장에 실패했습니다."));
+    } finally {
+      setRecordActionPending(false);
+    }
+  };
+
+  const approveReview = async () => {
+    if (!validAnalysisId) return;
+    if (isEditingResult) {
+      setFeedback("수정 중인 내용이 있습니다. 먼저 저장하거나 편집을 취소해주세요.");
+      return;
+    }
+    if (!canApproveRecord) return;
+
+    setRecordActionPending(true);
+    setFeedback("");
+
+    try {
+      const response = await approveAnalysis(projectId, validAnalysisId);
+      applyRecordResponse(response);
+      setIsEditingResult(false);
+      setEditDraft(null);
+      if (response.recordStatus !== "APPROVED") {
+        setFeedback("승인 요청은 처리되었지만 승인 완료 상태가 아닙니다.");
+      }
+    } catch (error: unknown) {
+      setFeedback(getAnalysisFeedbackMessage(error, "분석 승인에 실패했습니다."));
+    } finally {
+      setRecordActionPending(false);
+    }
   };
 
   const copyDraft = async () => {
@@ -595,11 +726,6 @@ export function PullRequestReviewScreen() {
     );
   };
 
-  const confirmDiscard = () => {
-    setDiscardOpen(false);
-    navigate(`/projects/${projectId}/github`);
-  };
-
   if (isAnalysisRoute) {
     if (!validAnalysisId || analysisLoadState !== "success") {
       return (
@@ -645,17 +771,20 @@ export function PullRequestReviewScreen() {
             analysisId={isAnalysisRoute ? analysisId : undefined}
             analysisRequesting={analysisRequesting}
             analysisStatus={isAnalysisRoute ? analysis?.analysisStatus : undefined}
+            canApprove={canApproveRecord}
+            canRequestAnalysis={canRequestAnalysis}
             isApprovedView={isApprovedView}
-            canRequestAnalysis={!isPullRequestRoute || analysisRestoreState === "ready"}
+            isEditingResult={isEditingResult}
             onAnalyze={startAnalysis}
-            onApprove={approveReview}
+            onApprove={() => void approveReview()}
             pullRequest={pullRequest}
-            projectId={projectId}
+            recordActionPending={recordActionPending}
           />
 
           {isApprovedView ? (
             <ApprovedPanel
               analysisResult={parsedAnalysisResult}
+              approvedAt={analysisRecord?.approvedAt}
               projectId={projectId}
               pullRequest={pullRequest}
             />
@@ -678,11 +807,14 @@ export function PullRequestReviewScreen() {
               analysisStatus={analysisStatus!}
               onCancel={cancelInProgressAnalysis}
             />
-          ) : canShowCompletedWorkspace && pullRequest && pullRequestFiles ? (
+          ) : canShowCompletedWorkspace && pullRequest && pullRequestFiles && displayedAnalysisResult ? (
             <ReviewWorkspace
-              analysisResult={parsedAnalysisResult}
+              analysisResult={displayedAnalysisResult}
+              disabled={recordActionPending}
               files={pullRequestFiles}
               followUpTasks={followUpTaskState}
+              isEditing={isEditingResult}
+              onChangeDraft={updateEditDraft}
               onToggleFollowUpTask={toggleFollowUpTask}
               pullRequest={pullRequest}
             />
@@ -705,18 +837,38 @@ export function PullRequestReviewScreen() {
           {showFooterActions ? (
             <footer className="pull-request-review__footer-actions">
               <div>
-                <Button onClick={() => setDiscardOpen(true)} variant="secondary">
-                  폐기
-                </Button>
-                <Button onClick={saveDraft} variant="secondary">
-                  임시 저장
+                {isEditingResult ? (
+                  <Button
+                    disabled={recordActionPending}
+                    onClick={cancelEditingResult}
+                    variant="secondary"
+                  >
+                    편집 취소
+                  </Button>
+                ) : (
+                  <Button
+                    disabled={!canStartEditing}
+                    onClick={startEditingResult}
+                    variant="secondary"
+                  >
+                    수정
+                  </Button>
+                )}
+                <Button
+                  disabled={!canSaveRecord}
+                  onClick={() => void saveDraft()}
+                  variant="secondary"
+                >
+                  {recordActionPending ? "저장 중..." : "임시 저장"}
                 </Button>
               </div>
               <div>
-                <Button onClick={copyDraft} variant="secondary">
+                <Button disabled={recordActionPending || isEditingResult} onClick={copyDraft} variant="secondary">
                   내용 복사
                 </Button>
-                <Button onClick={approveReview}>승인 요청</Button>
+                <Button disabled={!canApproveRecord} onClick={() => void approveReview()}>
+                  {recordActionPending ? "승인 중..." : "승인 요청"}
+                </Button>
               </div>
             </footer>
           ) : null}
@@ -726,54 +878,36 @@ export function PullRequestReviewScreen() {
           </p>
         </div>
       </PageContainer>
-
-      <Modal
-        description="현재 AI 분석 초안과 사람이 수정한 내용이 삭제됩니다. GitHub 원본 PR에는 영향을 주지 않습니다."
-        onClose={() => setDiscardOpen(false)}
-        open={discardOpen}
-        title="AI 분석 결과를 폐기할까요?"
-      >
-        <div className="pull-request-review__discard-dialog">
-          <aside>
-            <strong>폐기 후 되돌릴 수 없습니다.</strong>
-            <span>다시 분석하면 새로운 초안이 생성됩니다.</span>
-          </aside>
-          <div>
-            <Button onClick={() => setDiscardOpen(false)} variant="secondary">
-              취소
-            </Button>
-            <Button onClick={confirmDiscard} variant="danger">
-              분석 결과 폐기
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </main>
   );
 }
 
 type ReviewHeaderProps = {
-  projectId: string;
   analysisId?: string;
   analysisStatus?: AnalysisStatus;
   analysisRequesting: boolean;
   canRequestAnalysis?: boolean;
+  canApprove?: boolean;
   isApprovedView: boolean;
+  isEditingResult?: boolean;
   pullRequest?: PullRequestDetail;
   onAnalyze: () => void;
   onApprove: () => void;
+  recordActionPending?: boolean;
 };
 
 function ReviewHeader({
   analysisId,
   analysisRequesting,
   analysisStatus,
+  canApprove = false,
   canRequestAnalysis = true,
   isApprovedView,
+  isEditingResult = false,
   onAnalyze,
   onApprove,
-  projectId,
   pullRequest,
+  recordActionPending = false,
 }: ReviewHeaderProps) {
   const status = isApprovedView
     ? { label: "승인 완료", variant: "success" as const }
@@ -782,6 +916,9 @@ function ReviewHeader({
       : { label: "검토 필요", variant: "warning" as const };
   const analyzeDisabled = analysisRequesting
     || !canRequestAnalysis
+    || isApprovedView
+    || isEditingResult
+    || recordActionPending
     || (analysisStatus ? isActiveAnalysisStatus(analysisStatus) : false);
 
   return (
@@ -816,14 +953,7 @@ function ReviewHeader({
             GitHub에서 보기
           </a>
         ) : null}
-        {isApprovedView ? (
-          <Link
-            className="ui-button ui-button--secondary ui-button--sm"
-            to={`/projects/${projectId}/records`}
-          >
-            메모리 보기
-          </Link>
-        ) : analysisStatus === "FAILED" ? null : (
+        {isApprovedView || analysisStatus === "FAILED" ? null : (
           <Button
             disabled={analyzeDisabled || !pullRequest}
             onClick={onAnalyze}
@@ -833,8 +963,16 @@ function ReviewHeader({
             {analysisRequesting ? "분석 요청 중..." : "AI 재분석"}
           </Button>
         )}
-        <Button disabled={!isApprovedView && analysisStatus !== "COMPLETED"} onClick={onApprove} size="sm">
-          {isApprovedView ? "승인 완료" : "승인 요청"}
+        <Button
+          disabled={isApprovedView || !canApprove || recordActionPending}
+          onClick={onApprove}
+          size="sm"
+        >
+          {isApprovedView
+            ? "승인 완료"
+            : recordActionPending
+              ? "승인 중..."
+              : "승인 요청"}
         </Button>
       </div>
     </header>
@@ -845,6 +983,9 @@ type ReviewWorkspaceProps = {
   followUpTasks: FollowUpTaskState[];
   onToggleFollowUpTask: (id: string) => void;
   analysisResult?: AnalysisResult | null;
+  isEditing?: boolean;
+  disabled?: boolean;
+  onChangeDraft?: (updater: (current: AnalysisResult) => AnalysisResult) => void;
 };
 
 type ReviewWorkspaceDataProps = ReviewWorkspaceProps & {
@@ -854,8 +995,11 @@ type ReviewWorkspaceDataProps = ReviewWorkspaceProps & {
 
 function ReviewWorkspace({
   analysisResult,
+  disabled = false,
   files,
   followUpTasks,
+  isEditing = false,
+  onChangeDraft,
   onToggleFollowUpTask,
   pullRequest,
 }: ReviewWorkspaceDataProps) {
@@ -865,7 +1009,10 @@ function ReviewWorkspace({
       {analysisResult ? (
         <AnalysisResultPanel
           analysisResult={analysisResult}
+          disabled={disabled}
           followUpTasks={followUpTasks}
+          isEditing={isEditing}
+          onChangeDraft={onChangeDraft}
           onToggleFollowUpTask={onToggleFollowUpTask}
         />
       ) : (
@@ -1176,6 +1323,36 @@ function AnalysisTextSection({
   );
 }
 
+function AnalysisEditableTextSection({
+  disabled,
+  id,
+  onChange,
+  rows = 3,
+  title,
+  value,
+}: {
+  disabled?: boolean;
+  id: string;
+  onChange: (value: string) => void;
+  rows?: number;
+  title: string;
+  value: string;
+}) {
+  return (
+    <section aria-labelledby={id} className="pull-request-review__analysis-summary">
+      <h3 id={id}>{title}</h3>
+      <textarea
+        aria-labelledby={id}
+        className="pull-request-review__edit-textarea"
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        rows={rows}
+        value={value}
+      />
+    </section>
+  );
+}
+
 function AnalysisTagSection({
   emptyText,
   id,
@@ -1201,6 +1378,70 @@ function AnalysisTagSection({
   );
 }
 
+function AnalysisEditableStringList({
+  addLabel,
+  disabled,
+  emptyText,
+  id,
+  items,
+  onChange,
+  title,
+}: {
+  addLabel: string;
+  disabled?: boolean;
+  emptyText: string;
+  id: string;
+  items: string[];
+  onChange: (items: string[]) => void;
+  title: string;
+}) {
+  return (
+    <section aria-labelledby={id} className="pull-request-review__analysis-tags">
+      <div className="pull-request-review__analysis-section-heading">
+        <h3 id={id}>{title}</h3>
+        <Button
+          disabled={disabled}
+          onClick={() => onChange([...items, ""])}
+          size="sm"
+          variant="secondary"
+        >
+          {addLabel}
+        </Button>
+      </div>
+      {items.length > 0 ? (
+        <ul className="pull-request-review__edit-list">
+          {items.map((item, index) => (
+            <li key={`${id}-${index}`}>
+              <input
+                aria-label={`${title} ${index + 1}`}
+                className="pull-request-review__edit-input"
+                disabled={disabled}
+                onChange={(event) => {
+                  const next = [...items];
+                  next[index] = event.target.value;
+                  onChange(next);
+                }}
+                value={item}
+              />
+              <Button
+                aria-label={`${title} ${index + 1} 삭제`}
+                disabled={disabled}
+                onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}
+                size="sm"
+                variant="ghost"
+              >
+                삭제
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="pull-request-review__analysis-empty">{emptyText}</p>
+      )}
+    </section>
+  );
+}
+
 function DraftPlaceholderPanel() {
   return (
     <section className="pull-request-review__panel pull-request-review__draft" aria-labelledby="draft-title">
@@ -1218,7 +1459,10 @@ function DraftPlaceholderPanel() {
 
 function AnalysisResultPanel({
   analysisResult,
+  disabled = false,
   followUpTasks,
+  isEditing = false,
+  onChangeDraft,
   onToggleFollowUpTask,
 }: ReviewWorkspaceProps & { analysisResult: AnalysisResult }) {
   const evidenceMap = buildEvidenceMap(analysisResult.evidence);
@@ -1227,13 +1471,17 @@ function AnalysisResultPanel({
     analysisResult.changes.length - DEFAULT_VISIBLE_ANALYSIS_CHANGES,
     0,
   );
-  const visibleChanges = showAllChanges || hiddenChangeCount === 0
+  const visibleChanges = showAllChanges || hiddenChangeCount === 0 || isEditing
     ? analysisResult.changes
     : analysisResult.changes.slice(0, DEFAULT_VISIBLE_ANALYSIS_CHANGES);
   const isLegacyResult = !analysisResult.hasExtendedFields;
   const visibleEvidence = analysisResult.evidence.filter(
     (item) => !isContextEvidenceWithoutUserFacingInfo(item),
   );
+
+  const updateDraft = (updater: (current: AnalysisResult) => AnalysisResult) => {
+    onChangeDraft?.(updater);
+  };
 
   const changesSection = (
     <section
@@ -1242,7 +1490,19 @@ function AnalysisResultPanel({
     >
       <div className="pull-request-review__analysis-section-heading">
         <h3 id="analysis-changes-title">변경 파일</h3>
-        {analysisResult.changes.length > 0 ? (
+        {isEditing ? (
+          <Button
+            disabled={disabled}
+            onClick={() => updateDraft((current) => ({
+              ...current,
+              changes: [...current.changes, { filePath: "", description: "" }],
+            }))}
+            size="sm"
+            variant="secondary"
+          >
+            변경 파일 추가
+          </Button>
+        ) : analysisResult.changes.length > 0 ? (
           <span className="pull-request-review__analysis-count">
             {analysisResult.changes.length}개
           </span>
@@ -1252,14 +1512,56 @@ function AnalysisResultPanel({
       {analysisResult.changes.length > 0 ? (
         <>
           <ul className="pull-request-review__analysis-change-list">
-            {visibleChanges.map((change) => (
-              <li key={`${change.filePath}-${change.description}`}>
-                <code>{change.filePath}</code>
-                <span>{change.description}</span>
+            {visibleChanges.map((change, index) => (
+              <li key={`change-${index}`}>
+                {isEditing ? (
+                  <div className="pull-request-review__edit-change-row">
+                    <input
+                      aria-label={`변경 파일 경로 ${index + 1}`}
+                      className="pull-request-review__edit-input"
+                      disabled={disabled}
+                      onChange={(event) => updateDraft((current) => {
+                        const changes = [...current.changes];
+                        changes[index] = { ...changes[index]!, filePath: event.target.value };
+                        return { ...current, changes };
+                      })}
+                      value={change.filePath}
+                    />
+                    <textarea
+                      aria-label={`변경 파일 설명 ${index + 1}`}
+                      className="pull-request-review__edit-textarea"
+                      disabled={disabled}
+                      onChange={(event) => updateDraft((current) => {
+                        const changes = [...current.changes];
+                        changes[index] = { ...changes[index]!, description: event.target.value };
+                        return { ...current, changes };
+                      })}
+                      rows={2}
+                      value={change.description}
+                    />
+                    <Button
+                      aria-label={`변경 파일 ${index + 1} 삭제`}
+                      disabled={disabled}
+                      onClick={() => updateDraft((current) => ({
+                        ...current,
+                        changes: current.changes.filter((_, itemIndex) => itemIndex !== index),
+                      }))}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      삭제
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <code>{change.filePath}</code>
+                    <span>{change.description}</span>
+                  </>
+                )}
               </li>
             ))}
           </ul>
-          {hiddenChangeCount > 0 ? (
+          {!isEditing && hiddenChangeCount > 0 ? (
             <div className="pull-request-review__analysis-change-controls">
               {!showAllChanges ? (
                 <Button onClick={() => setShowAllChanges(true)} size="sm" variant="secondary">
@@ -1282,13 +1584,19 @@ function AnalysisResultPanel({
   return (
     <section
       aria-labelledby="analysis-result-title"
-      className="pull-request-review__panel pull-request-review__draft pull-request-review__analysis-result"
+      className={[
+        "pull-request-review__panel",
+        "pull-request-review__draft",
+        "pull-request-review__analysis-result",
+        isEditing ? "pull-request-review__analysis-result--editing" : "",
+      ].filter(Boolean).join(" ")}
     >
       <header className="pull-request-review__analysis-header">
         <div>
           <h2 id="analysis-result-title">AI 분석 결과</h2>
           <div className="pull-request-review__analysis-header-meta">
             <Badge variant="success">분석 완료</Badge>
+            {isEditing ? <Badge variant="warning">수정 중</Badge> : null}
             {analysisResult.riskScore !== undefined ? (
               <Badge variant="warning">리스크 점수 {analysisResult.riskScore}</Badge>
             ) : null}
@@ -1302,35 +1610,77 @@ function AnalysisResultPanel({
             이 분석은 이전 형식으로 생성된 결과입니다. 상세 분석 항목은 제공되지 않습니다.
           </p>
 
-          <AnalysisTextSection
-            id="analysis-summary-title"
-            text={analysisResult.summary}
-            title="작업 요약"
-          />
+          {isEditing ? (
+            <AnalysisEditableTextSection
+              disabled={disabled}
+              id="analysis-summary-title"
+              onChange={(value) => updateDraft((current) => withDraftStringField(current, "summary", value))}
+              title="작업 요약"
+              value={analysisResult.summary}
+            />
+          ) : (
+            <AnalysisTextSection
+              id="analysis-summary-title"
+              text={analysisResult.summary}
+              title="작업 요약"
+            />
+          )}
 
-          <section aria-label="분석 인사이트" className="pull-request-review__analysis-insights">
-            <AnalysisInsightCard
-              count={analysisResult.impacts.length}
-              emptyText="영향 정보가 없습니다."
-              items={analysisResult.impacts}
-              title="영향"
-              variant="impact"
-            />
-            <AnalysisInsightCard
-              count={analysisResult.risks.length}
-              emptyText="식별된 리스크가 없습니다."
-              items={analysisResult.risks}
-              title="리스크"
-              variant="risk"
-            />
-            <AnalysisInsightCard
-              count={analysisResult.recommendations.length}
-              emptyText="권장 사항이 없습니다."
-              items={analysisResult.recommendations}
-              title="권장 사항"
-              variant="recommendation"
-            />
-          </section>
+          {isEditing ? (
+            <div className="pull-request-review__analysis-insights pull-request-review__analysis-insights--editing">
+              <AnalysisEditableStringList
+                addLabel="영향 추가"
+                disabled={disabled}
+                emptyText="영향 정보가 없습니다."
+                id="analysis-impacts-title"
+                items={analysisResult.impacts}
+                onChange={(items) => updateDraft((current) => withDraftStringList(current, "impacts", items))}
+                title="영향"
+              />
+              <AnalysisEditableStringList
+                addLabel="리스크 추가"
+                disabled={disabled}
+                emptyText="식별된 리스크가 없습니다."
+                id="analysis-risks-title"
+                items={analysisResult.risks}
+                onChange={(items) => updateDraft((current) => withDraftStringList(current, "risks", items))}
+                title="리스크"
+              />
+              <AnalysisEditableStringList
+                addLabel="권장 사항 추가"
+                disabled={disabled}
+                emptyText="권장 사항이 없습니다."
+                id="analysis-recommendations-title"
+                items={analysisResult.recommendations}
+                onChange={(items) => updateDraft((current) => withDraftStringList(current, "recommendations", items))}
+                title="권장 사항"
+              />
+            </div>
+          ) : (
+            <section aria-label="분석 인사이트" className="pull-request-review__analysis-insights">
+              <AnalysisInsightCard
+                count={analysisResult.impacts.length}
+                emptyText="영향 정보가 없습니다."
+                items={analysisResult.impacts}
+                title="영향"
+                variant="impact"
+              />
+              <AnalysisInsightCard
+                count={analysisResult.risks.length}
+                emptyText="식별된 리스크가 없습니다."
+                items={analysisResult.risks}
+                title="리스크"
+                variant="risk"
+              />
+              <AnalysisInsightCard
+                count={analysisResult.recommendations.length}
+                emptyText="권장 사항이 없습니다."
+                items={analysisResult.recommendations}
+                title="권장 사항"
+                variant="recommendation"
+              />
+            </section>
+          )}
 
           {changesSection}
         </>
@@ -1342,72 +1692,227 @@ function AnalysisResultPanel({
             </p>
           ) : null}
 
-          <AnalysisTextSection
-            emptyText="요약 정보가 없습니다."
-            id="analysis-summary-title"
-            text={analysisResult.summary}
-            title="작업 요약"
-          />
+          {isEditing ? (
+            <AnalysisEditableTextSection
+              disabled={disabled}
+              id="analysis-summary-title"
+              onChange={(value) => updateDraft((current) => withDraftStringField(current, "summary", value))}
+              title="작업 요약"
+              value={analysisResult.summary}
+            />
+          ) : (
+            <AnalysisTextSection
+              emptyText="요약 정보가 없습니다."
+              id="analysis-summary-title"
+              text={analysisResult.summary}
+              title="작업 요약"
+            />
+          )}
 
-          <AnalysisTextSection
-            emptyText="작업 목적 정보가 없습니다."
-            id="analysis-purpose-title"
-            text={analysisResult.purpose}
-            title="작업 목적"
-          />
+          {isEditing ? (
+            <AnalysisEditableTextSection
+              disabled={disabled}
+              id="analysis-purpose-title"
+              onChange={(value) => updateDraft((current) => withDraftStringField(current, "purpose", value))}
+              title="작업 목적"
+              value={analysisResult.purpose}
+            />
+          ) : (
+            <AnalysisTextSection
+              emptyText="작업 목적 정보가 없습니다."
+              id="analysis-purpose-title"
+              text={analysisResult.purpose}
+              title="작업 목적"
+            />
+          )}
 
-          <AnalysisTextSection
-            emptyText="변경 이유 정보가 없습니다."
-            id="analysis-change-reason-title"
-            text={analysisResult.changeReason}
-            title="변경 이유"
-          />
+          {isEditing ? (
+            <AnalysisEditableTextSection
+              disabled={disabled}
+              id="analysis-change-reason-title"
+              onChange={(value) => updateDraft((current) => withDraftStringField(current, "changeReason", value))}
+              title="변경 이유"
+              value={analysisResult.changeReason}
+            />
+          ) : (
+            <AnalysisTextSection
+              emptyText="변경 이유 정보가 없습니다."
+              id="analysis-change-reason-title"
+              text={analysisResult.changeReason}
+              title="변경 이유"
+            />
+          )}
 
           <section aria-labelledby="analysis-diff-title" className="pull-request-review__analysis-diff">
             <h3 id="analysis-diff-title">변경 전 / 변경 후</h3>
             <div className="pull-request-review__analysis-diff-grid">
               <article>
                 <h4>변경 전</h4>
-                <p>{analysisResult.before || "정보가 없습니다."}</p>
+                {isEditing ? (
+                  <textarea
+                    aria-label="변경 전"
+                    className="pull-request-review__edit-textarea"
+                    disabled={disabled}
+                    onChange={(event) => updateDraft((current) => withDraftStringField(current, "before", event.target.value))}
+                    rows={4}
+                    value={analysisResult.before}
+                  />
+                ) : (
+                  <p>{analysisResult.before || "정보가 없습니다."}</p>
+                )}
               </article>
               <article>
                 <h4>변경 후</h4>
-                <p>{analysisResult.after || "정보가 없습니다."}</p>
+                {isEditing ? (
+                  <textarea
+                    aria-label="변경 후"
+                    className="pull-request-review__edit-textarea"
+                    disabled={disabled}
+                    onChange={(event) => updateDraft((current) => withDraftStringField(current, "after", event.target.value))}
+                    rows={4}
+                    value={analysisResult.after}
+                  />
+                ) : (
+                  <p>{analysisResult.after || "정보가 없습니다."}</p>
+                )}
               </article>
             </div>
           </section>
 
-          <AnalysisTagSection
-            emptyText="관련 기능 정보가 없습니다."
-            id="analysis-related-features-title"
-            items={analysisResult.relatedFeatures}
-            title="관련 기능"
-          />
+          {isEditing ? (
+            <AnalysisEditableStringList
+              addLabel="관련 기능 추가"
+              disabled={disabled}
+              emptyText="관련 기능 정보가 없습니다."
+              id="analysis-related-features-title"
+              items={analysisResult.relatedFeatures}
+              onChange={(items) => updateDraft((current) => withDraftStringList(current, "relatedFeatures", items))}
+              title="관련 기능"
+            />
+          ) : (
+            <AnalysisTagSection
+              emptyText="관련 기능 정보가 없습니다."
+              id="analysis-related-features-title"
+              items={analysisResult.relatedFeatures}
+              title="관련 기능"
+            />
+          )}
 
-          <AnalysisTagSection
-            emptyText="영향 역할 정보가 없습니다."
-            id="analysis-affected-roles-title"
-            items={analysisResult.affectedRoles}
-            title="영향 역할"
-          />
+          {isEditing ? (
+            <AnalysisEditableStringList
+              addLabel="영향 역할 추가"
+              disabled={disabled}
+              emptyText="영향 역할 정보가 없습니다."
+              id="analysis-affected-roles-title"
+              items={analysisResult.affectedRoles}
+              onChange={(items) => updateDraft((current) => withDraftStringList(current, "affectedRoles", items))}
+              title="영향 역할"
+            />
+          ) : (
+            <AnalysisTagSection
+              emptyText="영향 역할 정보가 없습니다."
+              id="analysis-affected-roles-title"
+              items={analysisResult.affectedRoles}
+              title="영향 역할"
+            />
+          )}
 
           <section
             aria-labelledby="analysis-role-impacts-title"
             className="pull-request-review__analysis-role-impacts"
           >
-            <h3 id="analysis-role-impacts-title">역할별 영향</h3>
+            <div className="pull-request-review__analysis-section-heading">
+              <h3 id="analysis-role-impacts-title">역할별 영향</h3>
+              {isEditing ? (
+                <Button
+                  disabled={disabled}
+                  onClick={() => updateDraft((current) => ({
+                    ...current,
+                    roleImpacts: [
+                      ...current.roleImpacts,
+                      { role: "", impact: "", basis: null, evidenceRefs: [] },
+                    ],
+                  }))}
+                  size="sm"
+                  variant="secondary"
+                >
+                  역할별 영향 추가
+                </Button>
+              ) : null}
+            </div>
             {analysisResult.roleImpacts.length > 0 ? (
               <ul className="pull-request-review__role-impact-list">
                 {analysisResult.roleImpacts.map((item, index) => (
-                  <li key={`${item.role}-${index}`}>
-                    <div className="pull-request-review__role-impact-header">
-                      <strong>{item.role || "역할 미지정"}</strong>
-                      <span>{item.impact}</span>
-                    </div>
-                    {item.basis ? (
-                      <p className="pull-request-review__role-impact-basis">근거 · {item.basis}</p>
-                    ) : null}
-                    <EvidenceRefsList evidenceMap={evidenceMap} refs={item.evidenceRefs} />
+                  <li key={`role-impact-${index}`}>
+                    {isEditing ? (
+                      <div className="pull-request-review__edit-role-impact">
+                        <input
+                          aria-label={`역할 ${index + 1}`}
+                          className="pull-request-review__edit-input"
+                          disabled={disabled}
+                          onChange={(event) => updateDraft((current) => {
+                            const roleImpacts = [...current.roleImpacts];
+                            roleImpacts[index] = { ...roleImpacts[index]!, role: event.target.value };
+                            return { ...current, roleImpacts };
+                          })}
+                          placeholder="역할"
+                          value={item.role}
+                        />
+                        <textarea
+                          aria-label={`역할 영향 ${index + 1}`}
+                          className="pull-request-review__edit-textarea"
+                          disabled={disabled}
+                          onChange={(event) => updateDraft((current) => {
+                            const roleImpacts = [...current.roleImpacts];
+                            roleImpacts[index] = { ...roleImpacts[index]!, impact: event.target.value };
+                            return { ...current, roleImpacts };
+                          })}
+                          placeholder="영향"
+                          rows={2}
+                          value={item.impact}
+                        />
+                        <textarea
+                          aria-label={`역할 영향 근거 ${index + 1}`}
+                          className="pull-request-review__edit-textarea"
+                          disabled={disabled}
+                          onChange={(event) => updateDraft((current) => {
+                            const roleImpacts = [...current.roleImpacts];
+                            roleImpacts[index] = {
+                              ...roleImpacts[index]!,
+                              basis: event.target.value || null,
+                            };
+                            return { ...current, roleImpacts };
+                          })}
+                          placeholder="근거"
+                          rows={2}
+                          value={item.basis ?? ""}
+                        />
+                        <EvidenceRefsList evidenceMap={evidenceMap} refs={item.evidenceRefs} />
+                        <Button
+                          aria-label={`역할별 영향 ${index + 1} 삭제`}
+                          disabled={disabled}
+                          onClick={() => updateDraft((current) => ({
+                            ...current,
+                            roleImpacts: current.roleImpacts.filter((_, itemIndex) => itemIndex !== index),
+                          }))}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          삭제
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="pull-request-review__role-impact-header">
+                          <strong>{item.role || "역할 미지정"}</strong>
+                          <span>{item.impact}</span>
+                        </div>
+                        {item.basis ? (
+                          <p className="pull-request-review__role-impact-basis">근거 · {item.basis}</p>
+                        ) : null}
+                        <EvidenceRefsList evidenceMap={evidenceMap} refs={item.evidenceRefs} />
+                      </>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -1416,37 +1921,63 @@ function AnalysisResultPanel({
             )}
           </section>
 
-          <section
-            aria-labelledby="analysis-risks-title"
-            className="pull-request-review__analysis-confirmation"
-          >
-            <h3 id="analysis-risks-title">리스크</h3>
-            {analysisResult.risks.length > 0 ? (
-              <ul className="pull-request-review__insight-list">
-                {analysisResult.risks.map((item) => <li key={item}>{item}</li>)}
-              </ul>
-            ) : (
-              <p className="pull-request-review__analysis-empty">
-                {analysisResult.hasRisksField
-                  ? "식별된 리스크가 없습니다."
-                  : "리스크 상세가 분석 결과에 제공되지 않았습니다."}
-              </p>
-            )}
-          </section>
+          {isEditing ? (
+            <AnalysisEditableStringList
+              addLabel="리스크 추가"
+              disabled={disabled}
+              emptyText={analysisResult.hasRisksField
+                ? "식별된 리스크가 없습니다."
+                : "리스크 상세가 분석 결과에 제공되지 않았습니다. 필요하면 추가할 수 있습니다."}
+              id="analysis-risks-title"
+              items={analysisResult.risks}
+              onChange={(items) => updateDraft((current) => withDraftStringList(current, "risks", items))}
+              title="리스크"
+            />
+          ) : (
+            <section
+              aria-labelledby="analysis-risks-title"
+              className="pull-request-review__analysis-confirmation"
+            >
+              <h3 id="analysis-risks-title">리스크</h3>
+              {analysisResult.risks.length > 0 ? (
+                <ul className="pull-request-review__insight-list">
+                  {analysisResult.risks.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              ) : (
+                <p className="pull-request-review__analysis-empty">
+                  {analysisResult.hasRisksField
+                    ? "식별된 리스크가 없습니다."
+                    : "리스크 상세가 분석 결과에 제공되지 않았습니다."}
+                </p>
+              )}
+            </section>
+          )}
 
-          <section
-            aria-labelledby="analysis-confirmation-title"
-            className="pull-request-review__analysis-confirmation"
-          >
-            <h3 id="analysis-confirmation-title">확인 필요 사항</h3>
-            {analysisResult.needsConfirmation.length > 0 ? (
-              <ul className="pull-request-review__insight-list">
-                {analysisResult.needsConfirmation.map((item) => <li key={item}>{item}</li>)}
-              </ul>
-            ) : (
-              <p className="pull-request-review__analysis-empty">확인이 필요한 사항이 없습니다.</p>
-            )}
-          </section>
+          {isEditing ? (
+            <AnalysisEditableStringList
+              addLabel="확인 필요 사항 추가"
+              disabled={disabled}
+              emptyText="확인이 필요한 사항이 없습니다."
+              id="analysis-confirmation-title"
+              items={analysisResult.needsConfirmation}
+              onChange={(items) => updateDraft((current) => withDraftStringList(current, "needsConfirmation", items))}
+              title="확인 필요 사항"
+            />
+          ) : (
+            <section
+              aria-labelledby="analysis-confirmation-title"
+              className="pull-request-review__analysis-confirmation"
+            >
+              <h3 id="analysis-confirmation-title">확인 필요 사항</h3>
+              {analysisResult.needsConfirmation.length > 0 ? (
+                <ul className="pull-request-review__insight-list">
+                  {analysisResult.needsConfirmation.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              ) : (
+                <p className="pull-request-review__analysis-empty">확인이 필요한 사항이 없습니다.</p>
+              )}
+            </section>
+          )}
 
           {changesSection}
 
@@ -1454,8 +1985,81 @@ function AnalysisResultPanel({
             aria-labelledby="analysis-follow-ups-title"
             className="pull-request-review__analysis-follow-ups"
           >
-            <h3 id="analysis-follow-ups-title">후속 작업</h3>
-            {followUpTasks.length > 0 ? (
+            <div className="pull-request-review__analysis-section-heading">
+              <h3 id="analysis-follow-ups-title">후속 작업</h3>
+              {isEditing ? (
+                <Button
+                  disabled={disabled}
+                  onClick={() => updateDraft((current) => ({
+                    ...current,
+                    followUpTasks: [
+                      ...current.followUpTasks,
+                      { role: null, task: "", evidenceRefs: [] },
+                    ],
+                  }))}
+                  size="sm"
+                  variant="secondary"
+                >
+                  후속 작업 추가
+                </Button>
+              ) : null}
+            </div>
+            {isEditing ? (
+              analysisResult.followUpTasks.length > 0 ? (
+                <ul className="pull-request-review__edit-list">
+                  {analysisResult.followUpTasks.map((item, index) => (
+                    <li key={`follow-up-edit-${index}`}>
+                      <input
+                        aria-label={`후속 작업 역할 ${index + 1}`}
+                        className="pull-request-review__edit-input"
+                        disabled={disabled}
+                        onChange={(event) => updateDraft((current) => {
+                          const followUpTasks = [...current.followUpTasks];
+                          followUpTasks[index] = {
+                            ...followUpTasks[index]!,
+                            role: event.target.value || null,
+                          };
+                          return { ...current, followUpTasks };
+                        })}
+                        placeholder="역할 (선택)"
+                        value={item.role ?? ""}
+                      />
+                      <textarea
+                        aria-label={`후속 작업 ${index + 1}`}
+                        className="pull-request-review__edit-textarea"
+                        disabled={disabled}
+                        onChange={(event) => updateDraft((current) => {
+                          const followUpTasks = [...current.followUpTasks];
+                          followUpTasks[index] = {
+                            ...followUpTasks[index]!,
+                            task: event.target.value,
+                          };
+                          return { ...current, followUpTasks };
+                        })}
+                        placeholder="작업 내용"
+                        rows={2}
+                        value={item.task}
+                      />
+                      <EvidenceRefsList evidenceMap={evidenceMap} refs={item.evidenceRefs} />
+                      <Button
+                        aria-label={`후속 작업 ${index + 1} 삭제`}
+                        disabled={disabled}
+                        onClick={() => updateDraft((current) => ({
+                          ...current,
+                          followUpTasks: current.followUpTasks.filter((_, itemIndex) => itemIndex !== index),
+                        }))}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        삭제
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="pull-request-review__analysis-empty">후속 작업이 없습니다.</p>
+              )
+            ) : followUpTasks.length > 0 ? (
               <>
                 <p className="pull-request-review__analysis-follow-ups-note">
                   프로젝트 기록 승인 전 로컬 체크리스트입니다.
@@ -1647,10 +2251,12 @@ function AnalysisCanceledPanel({
 
 function ApprovedPanel({
   analysisResult,
+  approvedAt,
   projectId,
   pullRequest,
 }: {
   analysisResult: AnalysisResult | null;
+  approvedAt?: string | null;
   projectId: string;
   pullRequest?: PullRequestDetail;
 }) {
@@ -1661,16 +2267,14 @@ function ApprovedPanel({
   return (
     <section aria-labelledby="analysis-state-title" className="pull-request-review__state-panel">
       <div aria-hidden="true" className="pull-request-review__state-icon pull-request-review__state-icon--approved">✓</div>
-      <h2 id="analysis-state-title">프로젝트 기록이 승인됐어요</h2>
-      <p>검토한 내용이 공식 프로젝트 메모리에 저장되었습니다.</p>
+      <h2 id="analysis-state-title">{ANALYSIS_APPROVED_COPY.title}</h2>
+      <p>{ANALYSIS_APPROVED_COPY.description}</p>
       <article className="pull-request-review__approved-summary">
         <h3>{pullRequest?.title ?? analysisResult?.summary ?? "승인된 기록"}</h3>
+        {approvedAt ? <p>승인 · {formatPullRequestDate(approvedAt)}</p> : null}
         {roleSummary ? <p>영향 · {roleSummary}</p> : null}
       </article>
       <div className="pull-request-review__state-actions">
-        <Link className="ui-button ui-button--primary ui-button--md" to={`/projects/${projectId}/records`}>
-          프로젝트 메모리에서 보기
-        </Link>
         <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
           GitHub 작업 목록
         </Link>
