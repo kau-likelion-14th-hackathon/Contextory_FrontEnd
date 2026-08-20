@@ -1,11 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  Link,
-  useNavigate,
-  useOutletContext,
-  useParams,
-  useSearchParams,
-} from "react-router-dom";
+import { Link, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../shared/api/client";
 import { getCurrentUser } from "../../shared/api/session";
 import { PageContainer } from "../../shared/layouts";
@@ -52,10 +46,6 @@ import {
   type PullRequestDetail,
   type PullRequestFilesResponse,
 } from "../github/pullRequestApi";
-import {
-  appendPullRequestListContext,
-  buildGithubListReturnTo,
-} from "../github/pullRequestListNavigation";
 import {
   ANALYSIS_APPROVED_COPY,
   canApproveAnalysisWhileEditing,
@@ -148,7 +138,6 @@ type PullRequestSourceFeedbackProps = {
   state: Exclude<PullRequestSourceState, "success">;
   projectId: string;
   errorMessage: string;
-  githubListReturnTo: string;
   onRetry: () => void;
 };
 
@@ -156,7 +145,6 @@ function PullRequestSourceFeedback({
   state,
   projectId,
   errorMessage,
-  githubListReturnTo,
   onRetry,
 }: PullRequestSourceFeedbackProps) {
   let content: React.ReactNode;
@@ -197,7 +185,7 @@ function PullRequestSourceFeedback({
       <EmptyState
         description={state === "invalid" ? "유효한 Pull Request 번호가 필요합니다." : "저장소에서 해당 Pull Request를 찾을 수 없습니다."}
         details={(
-          <Link className="ui-button ui-button--secondary ui-button--md" to={githubListReturnTo}>
+          <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
             GitHub 작업 목록
           </Link>
         )}
@@ -223,12 +211,12 @@ function PullRequestSourceFeedback({
 
 function AnalysisFeedback({
   state,
-  githubListReturnTo,
+  projectId,
   errorMessage,
   onRetry,
 }: {
   state: Exclude<AnalysisLoadState, "success">;
-  githubListReturnTo: string;
+  projectId: string;
   errorMessage: string;
   onRetry: () => void;
 }) {
@@ -246,7 +234,7 @@ function AnalysisFeedback({
       <EmptyState
         description="유효한 분석 ID가 필요합니다."
         details={(
-          <Link className="ui-button ui-button--secondary ui-button--md" to={githubListReturnTo}>
+          <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
             GitHub 작업 목록
           </Link>
         )}
@@ -258,7 +246,7 @@ function AnalysisFeedback({
       <EmptyState
         description="요청한 AI 분석이 존재하지 않거나 삭제되었습니다."
         details={(
-          <Link className="ui-button ui-button--secondary ui-button--md" to={githubListReturnTo}>
+          <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
             GitHub 작업 목록
           </Link>
         )}
@@ -270,7 +258,7 @@ function AnalysisFeedback({
       <EmptyState
         description={VIEWER_ANALYSIS_DENIED}
         details={(
-          <Link className="ui-button ui-button--secondary ui-button--md" to={githubListReturnTo}>
+          <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
             GitHub 작업 목록
           </Link>
         )}
@@ -296,14 +284,12 @@ function AnalysisFeedback({
 
 export function PullRequestReviewScreen() {
   const { projectId = "", pullRequestId, analysisId } = useParams();
-  const [searchParams] = useSearchParams();
   const { project } = useOutletContext<ProjectWorkspaceContextValue>();
   const currentUser = getCurrentUser();
   const permissionRole = project?.myPermissionRole;
   const canViewAnalysisContent = canViewAnalysisContentByRole(permissionRole);
   const canRequestByRole = canRequestAnalysisByRole(permissionRole);
   const canApproveByRole = canApproveAnalysisByRole(permissionRole);
-  const githubListReturnTo = buildGithubListReturnTo(projectId, searchParams);
   const [feedback, setFeedback] = useState("");
   const [analysisRequesting, setAnalysisRequesting] = useState(false);
   const [analysisActionPending, setAnalysisActionPending] = useState(false);
@@ -487,10 +473,7 @@ export function PullRequestReviewScreen() {
 
         if (latestAnalysis?.analysisId) {
           navigate(
-            appendPullRequestListContext(
-              `/projects/${projectId}/analyses/${latestAnalysis.analysisId}`,
-              searchParams,
-            ),
+            `/projects/${projectId}/analyses/${latestAnalysis.analysisId}`,
             { replace: true },
           );
           return;
@@ -514,7 +497,6 @@ export function PullRequestReviewScreen() {
     navigate,
     projectId,
     pullRequest,
-    searchParams,
     sourceState,
   ]);
 
@@ -674,10 +656,7 @@ export function PullRequestReviewScreen() {
 
     try {
       const response = await requestAnalysis(projectId, prNumber);
-      navigate(appendPullRequestListContext(
-        `/projects/${projectId}/analyses/${response.analysisId}`,
-        searchParams,
-      ));
+      navigate(`/projects/${projectId}/analyses/${response.analysisId}`);
     } catch (error: unknown) {
       setFeedback(getAnalysisFeedbackMessage(error, "AI 분석을 요청하지 못했습니다."));
     } finally {
@@ -703,10 +682,7 @@ export function PullRequestReviewScreen() {
 
     try {
       const response = await retryAnalysis(projectId, validAnalysisId);
-      navigate(appendPullRequestListContext(
-        `/projects/${projectId}/analyses/${response.newAnalysisId}`,
-        searchParams,
-      ));
+      navigate(`/projects/${projectId}/analyses/${response.newAnalysisId}`);
     } catch (error: unknown) {
       setFeedback(getAnalysisFeedbackMessage(error, "분석 재시도에 실패했습니다."));
     } finally {
@@ -896,8 +872,8 @@ export function PullRequestReviewScreen() {
       return (
         <AnalysisFeedback
           errorMessage={analysisError}
-          githubListReturnTo={githubListReturnTo}
           onRetry={() => setAnalysisRetryKey((key) => key + 1)}
+          projectId={projectId}
           state={analysisLoadState === "success" ? "loading" : analysisLoadState}
         />
       );
@@ -907,7 +883,6 @@ export function PullRequestReviewScreen() {
       return (
         <PullRequestSourceFeedback
           errorMessage={sourceError}
-          githubListReturnTo={githubListReturnTo}
           onRetry={() => setSourceRetryKey((key) => key + 1)}
           projectId={projectId}
           state={sourceState === "success" ? "loading" : sourceState}
@@ -920,7 +895,6 @@ export function PullRequestReviewScreen() {
     return (
       <PullRequestSourceFeedback
         errorMessage={sourceError}
-        githubListReturnTo={githubListReturnTo}
         onRetry={() => setSourceRetryKey((key) => key + 1)}
         projectId={projectId}
         state={sourceState === "success" ? "error" : sourceState}
@@ -954,10 +928,10 @@ export function PullRequestReviewScreen() {
               approvedAt={analysisRecord?.approvedAt}
               canManageMemory={canManageMemory}
               canRegisterMemory={canRegisterMemory}
-              githubListReturnTo={githubListReturnTo}
               memoryEnabled={Boolean(analysisRecord?.memoryEnabled)}
               memoryEnabledAt={analysisRecord?.memoryEnabledAt}
               onRegisterMemory={() => void registerMemory()}
+              projectId={projectId}
               pullRequest={pullRequest}
               recordActionPending={recordActionPending}
             />
@@ -973,8 +947,8 @@ export function PullRequestReviewScreen() {
           ) : isAnalysisRoute && analysisStatus === "CANCELED" ? (
             <AnalysisCanceledPanel
               canRequestAnalysis={canRequestByRole}
-              githubListReturnTo={githubListReturnTo}
               onAnalyze={startAnalysis}
+              projectId={projectId}
               pullRequest={pullRequest}
             />
           ) : isAnalysisRoute && isAnalysisInProgress ? (
@@ -2439,13 +2413,13 @@ function AnalysisFailedPanel({
 
 function AnalysisCanceledPanel({
   canRequestAnalysis,
-  githubListReturnTo,
   onAnalyze,
+  projectId,
   pullRequest,
 }: {
   canRequestAnalysis: boolean;
-  githubListReturnTo: string;
   onAnalyze: () => void;
+  projectId: string;
   pullRequest?: PullRequestDetail;
 }) {
   return (
@@ -2461,7 +2435,7 @@ function AnalysisCanceledPanel({
             {VIEWER_ANALYSIS_DENIED}
           </p>
         )}
-        <Link className="ui-button ui-button--secondary ui-button--md" to={githubListReturnTo}>
+        <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
           GitHub 작업 목록
         </Link>
         {pullRequest ? (
@@ -2485,10 +2459,10 @@ function ApprovedPanel({
   approvedAt,
   canManageMemory,
   canRegisterMemory,
-  githubListReturnTo,
   memoryEnabled,
   memoryEnabledAt,
   onRegisterMemory,
+  projectId,
   pullRequest,
   recordActionPending,
 }: {
@@ -2496,10 +2470,10 @@ function ApprovedPanel({
   approvedAt?: string | null;
   canManageMemory: boolean;
   canRegisterMemory: boolean;
-  githubListReturnTo: string;
   memoryEnabled: boolean;
   memoryEnabledAt?: string | null;
   onRegisterMemory: () => void;
+  projectId: string;
   pullRequest?: PullRequestDetail;
   recordActionPending: boolean;
 }) {
@@ -2532,7 +2506,7 @@ function ApprovedPanel({
             {recordActionPending ? "등록 중..." : "프로젝트 메모리에 등록"}
           </Button>
         ) : null}
-        <Link className="ui-button ui-button--secondary ui-button--md" to={githubListReturnTo}>
+        <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
           GitHub 작업 목록
         </Link>
       </div>

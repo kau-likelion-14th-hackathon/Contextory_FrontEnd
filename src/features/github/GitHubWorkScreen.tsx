@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useOutletContext, useParams, useSearchParams } from "react-router-dom";
+import { Link, useOutletContext, useParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../shared/api/client";
 import { PageContainer } from "../../shared/layouts";
 import { Button, EmptyState, ErrorState, LoadingState } from "../../shared/ui";
@@ -11,14 +11,6 @@ import {
   type PullRequestListResponse,
   type PullRequestState,
 } from "./pullRequestApi";
-import {
-  buildPullRequestDetailPath,
-  buildPullRequestListSearch,
-  getPullRequestPaginationItems,
-  isCanonicalPullRequestListSearch,
-  parsePullRequestListQuery,
-  type PullRequestListQuery,
-} from "./pullRequestListNavigation";
 import "./GitHubWorkScreen.css";
 
 const PAGE_SIZE = 7;
@@ -63,20 +55,12 @@ function classifyRequestError(error: unknown): GitHubWorkRequestState {
 export function GitHubWorkScreen() {
   const { projectId = "" } = useParams();
   const { project } = useOutletContext<ProjectWorkspaceContextValue>();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { state: pullRequestState, page: currentPage } = parsePullRequestListQuery(searchParams);
+  const [pullRequestState, setPullRequestState] = useState<PullRequestState>("OPEN");
+  const [currentPage, setCurrentPage] = useState(1);
   const [retryKey, setRetryKey] = useState(0);
   const [requestState, setRequestState] = useState<GitHubWorkRequestState>("loading");
   const [result, setResult] = useState<PullRequestListResponse>();
   const [errorMessage, setErrorMessage] = useState("");
-
-  useEffect(() => {
-    if (isCanonicalPullRequestListSearch(searchParams)) return;
-    setSearchParams(
-      buildPullRequestListSearch({ state: pullRequestState, page: currentPage }),
-      { replace: true },
-    );
-  }, [currentPage, pullRequestState, searchParams, setSearchParams]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -91,10 +75,7 @@ export function GitHubWorkScreen() {
       .then((response) => {
         if (controller.signal.aborted) return;
         if (response.content.length === 0 && currentPage > 1) {
-          setSearchParams(
-            buildPullRequestListSearch({ state: pullRequestState, page: 1 }),
-            { replace: true },
-          );
+          setCurrentPage((page) => Math.max(1, page - 1));
           return;
         }
         setResult(response);
@@ -108,21 +89,10 @@ export function GitHubWorkScreen() {
       });
 
     return () => controller.abort();
-  }, [currentPage, projectId, pullRequestState, retryKey, setSearchParams]);
-
-  const updateListQuery = (next: PullRequestListQuery) => {
-    if (next.state === pullRequestState && next.page === currentPage) return;
-    setSearchParams(buildPullRequestListSearch(next));
-  };
+  }, [currentPage, projectId, pullRequestState, retryKey]);
 
   const refresh = () => setRetryKey((key) => key + 1);
   const repositoryName = project?.repository?.repositoryFullName?.trim() || "연결된 저장소 없음";
-  const paginationItems = result
-    ? getPullRequestPaginationItems({
-      currentPage: result.page,
-      hasNext: result.hasNext,
-    })
-    : [];
 
   return (
     <main className="github-work">
@@ -154,7 +124,8 @@ export function GitHubWorkScreen() {
                   className="github-work__filter-chip"
                   key={filter.value}
                   onClick={() => {
-                    updateListQuery({ state: filter.value, page: 1 });
+                    setPullRequestState(filter.value);
+                    setCurrentPage(1);
                   }}
                   type="button"
                 >
@@ -182,11 +153,7 @@ export function GitHubWorkScreen() {
                   {result.content.map((pullRequest) => (
                     <PullRequestRow
                       actionLabel="보기"
-                      actionTo={buildPullRequestDetailPath(
-                        projectId,
-                        pullRequest.prNumber,
-                        { state: pullRequestState, page: currentPage },
-                      )}
+                      actionTo={`/projects/${projectId}/github/pulls/${pullRequest.prNumber}`}
                       author={pullRequest.authorLogin ?? "—"}
                       baseBranch={pullRequest.targetBranch ?? undefined}
                       githubStatus={getGitHubStatus(pullRequest.state, pullRequest.draft)}
@@ -206,56 +173,17 @@ export function GitHubWorkScreen() {
                     <Button
                       aria-label="이전 Pull Request 페이지"
                       disabled={currentPage <= 1}
-                      onClick={() => {
-                        updateListQuery({
-                          state: pullRequestState,
-                          page: Math.max(1, currentPage - 1),
-                        });
-                      }}
+                      onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                       size="sm"
                       variant="secondary"
                     >
                       이전
                     </Button>
-                    <div className="github-work__pagination-pages">
-                      {paginationItems.map((item, index) => (
-                        item === "ellipsis" ? (
-                          <span
-                            aria-hidden="true"
-                            className="github-work__pagination-ellipsis"
-                            key={`ellipsis-${index}`}
-                          >
-                            …
-                          </span>
-                        ) : (
-                          <button
-                            aria-current={item === currentPage ? "page" : undefined}
-                            aria-label={`${item}페이지`}
-                            className={
-                              item === currentPage
-                                ? "github-work__pagination-page github-work__pagination-page--current"
-                                : "github-work__pagination-page"
-                            }
-                            key={item}
-                            onClick={() => {
-                              updateListQuery({ state: pullRequestState, page: item });
-                            }}
-                            type="button"
-                          >
-                            {item}
-                          </button>
-                        )
-                      ))}
-                    </div>
+                    <span aria-current="page">{result.page}</span>
                     <Button
                       aria-label="다음 Pull Request 페이지"
                       disabled={!result.hasNext}
-                      onClick={() => {
-                        updateListQuery({
-                          state: pullRequestState,
-                          page: currentPage + 1,
-                        });
-                      }}
+                      onClick={() => setCurrentPage((page) => page + 1)}
                       size="sm"
                       variant="secondary"
                     >
