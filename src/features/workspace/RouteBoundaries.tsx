@@ -8,8 +8,7 @@ import {
 
 type AuthStatus = "checking" | "authenticated" | "unauthenticated";
 
-export function AuthBoundary() {
-  const location = useLocation();
+function useAuthBootstrap() {
   const [status, setStatus] = useState<AuthStatus>(() =>
     hasAuthenticatedSession() ? "authenticated" : "checking",
   );
@@ -39,9 +38,18 @@ export function AuthBoundary() {
     };
   }, []);
 
-  if (status === "checking") {
-    return <main aria-live="polite" role="status">인증 상태를 확인하고 있습니다.</main>;
-  }
+  return status;
+}
+
+function AuthCheckingStatus() {
+  return <main aria-live="polite" role="status">인증 상태를 확인하고 있습니다.</main>;
+}
+
+export function AuthBoundary() {
+  const location = useLocation();
+  const status = useAuthBootstrap();
+
+  if (status === "checking") return <AuthCheckingStatus />;
 
   if (status === "unauthenticated") {
     return (
@@ -51,6 +59,18 @@ export function AuthBoundary() {
         to="/auth/login"
       />
     );
+  }
+
+  return <Outlet />;
+}
+
+/** 이미 로그인된 사용자가 login/signup에 머물지 않도록 한다. AuthBoundary와 반대로 guest만 Outlet을 본다. */
+export function GuestBoundary() {
+  const status = useAuthBootstrap();
+
+  if (status === "checking") return <AuthCheckingStatus />;
+  if (status === "authenticated") {
+    return <Navigate replace to="/projects" />;
   }
 
   return <Outlet />;

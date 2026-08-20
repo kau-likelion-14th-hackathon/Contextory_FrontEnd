@@ -16,6 +16,7 @@ import { ProjectMemoryScreen } from "../features/memory/ProjectMemoryScreen";
 import { TeamProjectSettingsScreen } from "../features/settings/TeamProjectSettingsScreen";
 import {
   AuthBoundary,
+  GuestBoundary,
   ProjectBoundary,
 } from "../features/workspace/RouteBoundaries";
 import { WorkspaceShell } from "../features/workspace/WorkspaceShell";
@@ -24,15 +25,20 @@ import { NotFoundScreen } from "../features/workspace/WorkspaceScreens";
 export const router = createBrowserRouter([
   {
     path: "/",
-    element: <Navigate to="/auth/login" replace />,
+    element: <Navigate to="/projects" replace />,
   },
   {
-    path: "/auth/login",
-    element: <AuthScreen mode="login" />, // 로그인 화면
-  },
-  {
-    path: "/auth/signup",
-    element: <AuthScreen mode="signup" />,  // 회원가입 화면
+    element: <GuestBoundary />,
+    children: [
+      {
+        path: "/auth/login",
+        element: <AuthScreen mode="login" />, // 로그인 화면
+      },
+      {
+        path: "/auth/signup",
+        element: <AuthScreen mode="signup" />, // 회원가입 화면
+      },
+    ],
   },
   {
     path: "/auth/forgot-password",
