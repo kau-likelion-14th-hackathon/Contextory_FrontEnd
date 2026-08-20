@@ -930,18 +930,31 @@ export function PullRequestReviewScreen() {
           />
 
           {isApprovedView ? (
-            <ApprovedPanel
-              analysisResult={parsedAnalysisResult}
-              approvedAt={analysisRecord?.approvedAt}
-              canManageMemory={canManageMemory}
-              canRegisterMemory={canRegisterMemory}
-              memoryEnabled={Boolean(analysisRecord?.memoryEnabled)}
-              memoryEnabledAt={analysisRecord?.memoryEnabledAt}
-              onRegisterMemory={() => void registerMemory()}
-              projectId={projectId}
-              pullRequest={pullRequest}
-              recordActionPending={recordActionPending}
-            />
+            <>
+              <ApprovedPanel
+                analysisResult={parsedAnalysisResult}
+                approvedAt={analysisRecord?.approvedAt}
+                canManageMemory={canManageMemory}
+                canRegisterMemory={canRegisterMemory}
+                memoryEnabled={Boolean(analysisRecord?.memoryEnabled)}
+                memoryEnabledAt={analysisRecord?.memoryEnabledAt}
+                onRegisterMemory={() => void registerMemory()}
+                projectId={projectId}
+                pullRequest={pullRequest}
+                recordActionPending={recordActionPending}
+              />
+              {pullRequest && pullRequestFiles && displayedAnalysisResult ? (
+                <ReviewWorkspace
+                  analysisResult={displayedAnalysisResult}
+                  disabled
+                  files={pullRequestFiles}
+                  followUpTasks={followUpTaskState}
+                  isEditing={false}
+                  onToggleFollowUpTask={toggleFollowUpTask}
+                  pullRequest={pullRequest}
+                />
+              ) : null}
+            </>
           ) : isAnalysisRoute && analysisStatus === "FAILED" ? (
             <AnalysisFailedPanel
               actionPending={analysisActionPending}
