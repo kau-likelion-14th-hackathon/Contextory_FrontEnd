@@ -181,6 +181,30 @@
   overflow-wrap: anywhere;
 }
 
+.account-card__status {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.account-card__status--error {
+  color: var(--color-danger, #c0392b);
+}
+
+.account-card__badge {
+  background: var(--color-surface-selected);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-left: 8px;
+  padding: 2px 8px;
+  vertical-align: middle;
+}
+
 .account-card__row > .ui-button {
   flex: 0 0 auto;
   min-width: 120px;
