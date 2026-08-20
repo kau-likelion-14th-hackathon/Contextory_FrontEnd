@@ -6,9 +6,11 @@ import { AuthLayout } from "../../shared/layouts";
 import { Button, FormField, Tabs } from "../../shared/ui";
 import { login, signup, toAuthSession } from "./authApi";
 import {
-  clearKakaoInvitationReturnPath,
+  clearKakaoAuthReturnPath,
+  getLocationStateReturnPath,
   getSafeInvitationRedirectPath,
-  setKakaoInvitationReturnPath,
+  resolvePostAuthPath,
+  setKakaoAuthReturnPath,
 } from "./invitationRedirect";
 import { startKakaoAuthorization } from "./kakaoAuth";
 import "./Auth.css";
@@ -22,14 +24,23 @@ const PASSWORD_MISMATCH_ERROR = "비밀번호가 일치하지 않습니다.";
 
 type AuthLocationState = {
   authFeedback?: unknown;
+  from?: unknown;
 };
 
 export function AuthScreen({ mode }: { mode: AuthMode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const redirectPath = getSafeInvitationRedirectPath(searchParams.get("redirect"));
-  const redirectQuery = redirectPath ? `?redirect=${encodeURIComponent(redirectPath)}` : "";
+  const invitationRedirectPath = getSafeInvitationRedirectPath(searchParams.get("redirect"));
+  const returnFromState = getLocationStateReturnPath(location.state);
+  const postAuthPath = resolvePostAuthPath({
+    redirectParam: searchParams.get("redirect"),
+    locationState: location.state,
+  });
+  const redirectQuery = invitationRedirectPath
+    ? `?redirect=${encodeURIComponent(invitationRedirectPath)}`
+    : "";
+  const authSwitchState = returnFromState ? { from: returnFromState } : undefined;
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -45,7 +56,10 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
   });
 
   function handleTabChange(id: string) {
-    navigate(id === "login" ? `/auth/login${redirectQuery}` : `/auth/signup${redirectQuery}`);
+    navigate(
+      id === "login" ? `/auth/login${redirectQuery}` : `/auth/signup${redirectQuery}`,
+      { state: authSwitchState },
+    );
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -93,7 +107,7 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
           });
 
       setSession(toAuthSession(response), mode === "login" && keepSignedIn);
-      navigate(redirectPath ?? "/projects", { replace: true });
+      navigate(postAuthPath, { replace: true });
     } catch (error) {
       const fallback = mode === "login"
         ? "이메일 또는 비밀번호를 확인해주세요."
@@ -106,10 +120,10 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
 
   function handleKakaoLogin() {
     setFeedback("");
-    if (redirectPath) {
-      setKakaoInvitationReturnPath(redirectPath);
+    if (postAuthPath !== "/projects") {
+      setKakaoAuthReturnPath(postAuthPath);
     } else {
-      clearKakaoInvitationReturnPath();
+      clearKakaoAuthReturnPath();
     }
     if (!startKakaoAuthorization(mode === "login" && keepSignedIn)) {
       setFeedback("카카오 로그인을 시작하려면 OAuth 환경설정이 필요합니다.");
@@ -276,11 +290,11 @@ export function AuthScreen({ mode }: { mode: AuthMode }) {
         <p className="auth-card__switch">
           {mode === "login" ? (
             <>
-              계정이 없으신가요? <Link to={`/auth/signup${redirectQuery}`}>회원가입</Link>
+              계정이 없으신가요? <Link state={authSwitchState} to={`/auth/signup${redirectQuery}`}>회원가입</Link>
             </>
           ) : (
             <>
-              이미 계정이 있으신가요? <Link to={`/auth/login${redirectQuery}`}>로그인</Link>
+              이미 계정이 있으신가요? <Link state={authSwitchState} to={`/auth/login${redirectQuery}`}>로그인</Link>
             </>
           )}
         </p>
