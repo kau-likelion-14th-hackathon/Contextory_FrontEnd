@@ -51,8 +51,7 @@ import {
   type ProjectInvitation,
   type ProjectMember,
 } from "../team/projectTeamApi";
-import { BillingSettingsPanel, stateDescriptions } from "./BillingSettingsPanel";
-import { isBillingViewState } from "./billingSettingsMock";
+import { BillingSettingsPanel } from "./BillingSettingsPanel";
 import "./TeamProjectSettingsScreen.css";
 
 type SettingsTab = "project" | "github" | "members" | "billing";
@@ -138,8 +137,6 @@ export function TeamProjectSettingsScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   const activeTab: SettingsTab = isSettingsTab(tabParam) ? tabParam : "members";
-  const billingStateParam = searchParams.get("billingState");
-  const billingState = isBillingViewState(billingStateParam) ? billingStateParam : "default";
   const [feedback, setFeedback] = useState("");
 
   const changeTab = (tabId: string) => {
@@ -159,16 +156,16 @@ export function TeamProjectSettingsScreen() {
             <header className="billing-settings__header">
               <div>
                 <h1>결제 및 플랜</h1>
-                <p>{stateDescriptions[billingState]}</p>
+                <p>결제 기능은 현재 준비 중입니다. 아래 내용은 예시 데이터입니다.</p>
                 <p aria-live="polite" className="billing-settings__feedback">{feedback}</p>
               </div>
               <Button
                 className="billing-settings__history-button"
-                onClick={() => setFeedback("결제 내역 기능은 현재 결제 시스템과 연결되어 있지 않습니다.")}
+                disabled
                 size="sm"
                 variant="secondary"
               >
-                결제 내역
+                준비 중
               </Button>
             </header>
           ) : (
@@ -199,10 +196,7 @@ export function TeamProjectSettingsScreen() {
             <MembersPanel onFeedback={setFeedback} />
           ) : null}
           {activeTab === "billing" ? (
-            <BillingSettingsPanel
-              onFeedback={setFeedback}
-              state={billingState}
-            />
+            <BillingSettingsPanel />
           ) : null}
         </div>
       </PageContainer>
