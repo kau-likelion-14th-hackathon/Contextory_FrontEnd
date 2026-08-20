@@ -58,6 +58,7 @@ import {
   withDraftStringList,
 } from "./analysisEditDraft";
 import { PullRequestBodyMarkdown } from "./PullRequestBodyMarkdown";
+import { getAnalysisRequestActionLabel } from "./analysisRequestCopy";
 import type { ProjectWorkspaceContextValue } from "../workspace/WorkspaceShell";
 import "./PullRequestReviewScreen.css";
 
@@ -386,6 +387,11 @@ export function PullRequestReviewScreen() {
     isEditing: isEditingResult,
     recordActionPending,
   }) && canRequestByRole;
+  const isInitialAnalysis = isPullRequestRoute && analysisRestoreState === "ready";
+  const analysisActionLabel = getAnalysisRequestActionLabel({
+    isInitialAnalysis,
+    requesting: analysisRequesting,
+  });
   useEffect(() => {
     setAnalysisRecord(null);
     setRecordActionPending(false);
@@ -909,6 +915,7 @@ export function PullRequestReviewScreen() {
       <PageContainer size="full">
         <div className="pull-request-review__content">
           <ReviewHeader
+            analysisActionLabel={analysisActionLabel}
             analysisId={isAnalysisRoute ? analysisId : undefined}
             analysisRequesting={analysisRequesting}
             analysisStatus={isAnalysisRoute ? analysis?.analysisStatus : undefined}
@@ -1044,6 +1051,7 @@ export function PullRequestReviewScreen() {
 }
 
 type ReviewHeaderProps = {
+  analysisActionLabel: string;
   analysisId?: string;
   analysisStatus?: AnalysisStatus;
   analysisRequesting: boolean;
@@ -1058,6 +1066,7 @@ type ReviewHeaderProps = {
 };
 
 function ReviewHeader({
+  analysisActionLabel,
   analysisId,
   analysisRequesting,
   analysisStatus,
@@ -1121,7 +1130,7 @@ function ReviewHeader({
             size="sm"
             variant={analysisStatus === "CANCELED" ? "primary" : "secondary"}
           >
-            {analysisRequesting ? "분석 요청 중..." : "AI 재분석"}
+            {analysisActionLabel}
           </Button>
         )}
         {canApprove || isApprovedView ? (
@@ -1614,7 +1623,7 @@ function DraftPlaceholderPanel() {
       </header>
       <div className="pull-request-review__draft-empty">
         <p>AI 분석을 실행하면 PR 변경 내용을 바탕으로 프로젝트 기록 초안이 생성됩니다.</p>
-        <p>상단의 <strong>AI 재분석</strong> 버튼으로 분석을 시작할 수 있습니다.</p>
+        <p>상단의 <strong>AI 분석</strong> 버튼으로 분석을 시작할 수 있습니다.</p>
       </div>
     </section>
   );
