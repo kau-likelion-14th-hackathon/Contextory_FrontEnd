@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useOutletContext, useParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../shared/api/client";
 import { PageContainer } from "../../shared/layouts";
 import { Badge, EmptyState, ErrorState, LoadingState, Pagination } from "../../shared/ui";
 import { parseAnalysisResult } from "../analysis/analysisApi";
+import { canViewAnalysisContentByRole } from "../analysis/analysisPermissions";
+import type { ProjectWorkspaceContextValue } from "../workspace/WorkspaceShell";
 import {
   getProjectMemories,
   type ProjectMemoryListItem,
@@ -14,7 +16,7 @@ import "./ProjectMemoryScreen.css";
 const DEFAULT_PAGE_SIZE = 20;
 const pageSizeOptions = [10, 20, 50] as const;
 
-type MemoryLoadState = "loading" | "success" | "empty" | "error";
+type MemoryLoadState = "loading" | "success" | "empty" | "error" | "forbidden";
 
 function formatApprovedAt(value: string) {
   const date = new Date(value);
@@ -41,7 +43,11 @@ function getMemoryListDescription(item: ProjectMemoryListItem) {
 
 export function ProjectMemoryScreen() {
   const { projectId = "" } = useParams();
-  const [loadState, setLoadState] = useState<MemoryLoadState>("loading");
+  const { project } = useOutletContext<ProjectWorkspaceContextValue>();
+  const canViewMemories = canViewAnalysisContentByRole(project?.myPermissionRole);
+  const [loadState, setLoadState] = useState<MemoryLoadState>(
+    canViewMemories ? "loading" : "forbidden",
+  );
   const [retryKey, setRetryKey] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
   const [result, setResult] = useState<ProjectMemoryListResponse>();
@@ -50,6 +56,13 @@ export function ProjectMemoryScreen() {
 
   useEffect(() => {
     if (!projectId) return;
+
+    if (!canViewMemories) {
+      setLoadState("forbidden");
+      setResult(undefined);
+      setErrorMessage("");
+      return;
+    }
 
     const controller = new AbortController();
     setLoadState("loading");
@@ -77,7 +90,7 @@ export function ProjectMemoryScreen() {
       });
 
     return () => controller.abort();
-  }, [currentPage, pageSize, projectId, retryKey]);
+  }, [canViewMemories, currentPage, pageSize, projectId, retryKey]);
 
   const totalPages = Math.max(1, result?.totalPages ?? 1);
 
@@ -94,6 +107,18 @@ export function ProjectMemoryScreen() {
               메모리 등록된 기록만 표시
             </Badge>
           </header>
+
+          {loadState === "forbidden" ? (
+            <EmptyState
+              description="VIEWER 권한에서는 프로젝트 메모리를 조회할 수 없습니다."
+              details={(
+                <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/home`}>
+                  프로젝트 홈
+                </Link>
+              )}
+              title="프로젝트 메모리를 조회할 수 없습니다"
+            />
+          ) : null}
 
           {loadState === "loading" ? (
             <LoadingState

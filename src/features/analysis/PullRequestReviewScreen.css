@@ -745,6 +745,13 @@
   text-align: right;
 }
 
+.pull-request-review__permission-hint {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
 .pull-request-review__state-panel {
   align-content: center;
   background: var(--color-surface);
