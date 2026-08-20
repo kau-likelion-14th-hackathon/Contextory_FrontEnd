@@ -318,7 +318,8 @@
 }
 
 .settings-github-warning,
-.settings-github-readonly {
+.settings-github-readonly,
+.settings-project-readonly {
   font-size: 12px;
   line-height: 1.5;
 }
@@ -327,7 +328,8 @@
   color: var(--color-danger);
 }
 
-.settings-github-readonly {
+.settings-github-readonly,
+.settings-project-readonly {
   color: var(--color-text-muted);
 }
 
