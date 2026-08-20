@@ -14,13 +14,15 @@ import {
   updateMyInfo,
   type MyInfoResponse,
 } from "./accountApi";
-import {
-  accountProfileMock,
-  accountSections,
-  connectedAccountMock,
-  type AccountSectionId,
-} from "./accountSettingsMock";
 import "./AccountSettingsScreen.css";
+
+const accountSections = [
+  { id: "account-profile", label: "프로필" },
+  { id: "account-security", label: "로그인 및 보안" },
+  { id: "account-connections", label: "연결된 계정" },
+] as const;
+
+type AccountSectionId = (typeof accountSections)[number]["id"];
 
 type AccountLocationState = {
   from?: unknown;
@@ -48,20 +50,10 @@ export function AccountSettingsScreen() {
   const sessionUser = getCurrentUser();
   const [activeSection, setActiveSection] = useState<AccountSectionId>("account-profile");
   const [feedback, setFeedback] = useState("");
-  const [profile, setProfile] = useState<MyInfoResponse | null>(() =>
-    sessionUser
-      ? {
-          introduction: sessionUser.introduction,
-          loginId: sessionUser.loginId,
-          profileImage: sessionUser.profileImage,
-          userId: sessionUser.id,
-          username: sessionUser.username,
-        }
-      : null,
-  );
+  const [profile, setProfile] = useState<MyInfoResponse | null>(null);
   const [profileDraft, setProfileDraft] = useState({
-    introduction: sessionUser?.introduction ?? "",
-    username: sessionUser?.username ?? "",
+    introduction: "",
+    username: "",
   });
   const [profileEditing, setProfileEditing] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -73,9 +65,13 @@ export function AccountSettingsScreen() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const returnPath = getProjectReturnPath(location.state);
+  const canEditProfile = Boolean(profile) && !profileLoading;
 
   useEffect(() => {
     let active = true;
+
+    setProfileLoading(true);
+    setProfileError("");
 
     getMyInfo()
       .then((response) => {
@@ -85,6 +81,7 @@ export function AccountSettingsScreen() {
           introduction: response.introduction,
           username: response.username,
         });
+        setProfileError("");
         updateSessionUser({
           id: response.userId,
           introduction: response.introduction,
@@ -94,7 +91,10 @@ export function AccountSettingsScreen() {
         });
       })
       .catch((error: unknown) => {
-        if (active) setFeedback(getApiErrorMessage(error, "사용자 정보를 불러오지 못했습니다."));
+        if (!active) return;
+        setProfile(null);
+        setProfileEditing(false);
+        setProfileError(getApiErrorMessage(error, "사용자 정보를 불러오지 못했습니다."));
       })
       .finally(() => {
         if (active) setProfileLoading(false);
@@ -138,6 +138,8 @@ export function AccountSettingsScreen() {
 
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!profile) return;
+
     const username = profileDraft.username.trim();
 
     if (!username) {
@@ -156,8 +158,6 @@ export function AccountSettingsScreen() {
       const nextProfile: MyInfoResponse = {
         ...profile,
         introduction: response.introduction,
-        loginId: profile?.loginId ?? sessionUser?.loginId ?? "",
-        profileImage: profile?.profileImage ?? sessionUser?.profileImage ?? "",
         userId: response.userId,
         username: response.username,
       };
@@ -210,16 +210,12 @@ export function AccountSettingsScreen() {
     }
   };
 
-  const profileName = profile?.username ?? accountProfileMock.name;
-  const profileEmail = profile?.loginId ?? accountProfileMock.email;
-  const profileIntroduction = profile?.introduction || "소개가 등록되지 않았습니다.";
-
   return (
     <div className="account-settings-route">
       <TopBar
         onProfileFeedback={setFeedback}
-        user={profileName}
-        userEmail={profileEmail}
+        user={sessionUser?.username}
+        userEmail={sessionUser?.loginId}
       />
 
       <main className="account-settings">
@@ -254,60 +250,74 @@ export function AccountSettingsScreen() {
           <div className="account-settings__content">
             <section className="account-card" id="account-profile" tabIndex={-1}>
               <h2>프로필</h2>
-              <div className="account-card__row account-profile-row">
-                <span aria-hidden="true" className="account-avatar account-avatar--large">
-                  {profileName.slice(0, 1)}
-                </span>
-                <div className="account-card__copy">
-                  <h3>{profileName}</h3>
-                  <p>{profileEmail}</p>
-                  <p>{profileIntroduction}</p>
-                </div>
-                <Button
-                  disabled={profileLoading}
-                  onClick={() => {
-                    setProfileError("");
-                    setProfileEditing(true);
-                  }}
-                  size="sm"
-                  variant="secondary"
-                >
-                  프로필 수정
-                </Button>
-              </div>
-              {profileEditing ? (
-                <form className="account-profile-form" onSubmit={saveProfile}>
-                  <FormField
-                    errorMessage={!profileDraft.username.trim() ? profileError : undefined}
-                    id="account-profile-username"
-                    label="사용자명"
-                    onChange={(event) => {
-                      setProfileDraft((current) => ({ ...current, username: event.target.value }));
-                      setProfileError("");
-                    }}
-                    required
-                    value={profileDraft.username}
-                  />
-                  <label className="account-profile-form__introduction" htmlFor="account-profile-introduction">
-                    <span>소개</span>
-                    <textarea
-                      className="ui-input"
-                      id="account-profile-introduction"
-                      onChange={(event) => setProfileDraft((current) => ({
-                        ...current,
-                        introduction: event.target.value,
-                      }))}
-                      value={profileDraft.introduction}
-                    />
-                  </label>
-                  {profileError && profileDraft.username.trim() ? (
-                    <p className="account-profile-form__error" role="alert">{profileError}</p>
-                  ) : null}
-                  <div className="account-profile-form__actions">
-                    <Button disabled={profileSaving} onClick={cancelProfileEdit} variant="secondary">취소</Button>
-                    <Button loading={profileSaving} type="submit">저장</Button>
+              {profileLoading ? (
+                <p aria-live="polite" className="account-card__status" role="status">
+                  프로필 정보를 불러오는 중입니다.
+                </p>
+              ) : null}
+              {!profileLoading && profileError && !profile ? (
+                <p className="account-card__status account-card__status--error" role="alert">
+                  {profileError}
+                </p>
+              ) : null}
+              {!profileLoading && profile ? (
+                <>
+                  <div className="account-card__row account-profile-row">
+                    <span aria-hidden="true" className="account-avatar account-avatar--large">
+                      {profile.username.slice(0, 1)}
+                    </span>
+                    <div className="account-card__copy">
+                      <h3>{profile.username}</h3>
+                      <p>{profile.loginId}</p>
+                      <p>{profile.introduction || "소개가 등록되지 않았습니다."}</p>
+                    </div>
+                    <Button
+                      disabled={!canEditProfile}
+                      onClick={() => {
+                        setProfileError("");
+                        setProfileEditing(true);
+                      }}
+                      size="sm"
+                      variant="secondary"
+                    >
+                      프로필 수정
+                    </Button>
                   </div>
-                </form>
+                  {profileEditing ? (
+                    <form className="account-profile-form" onSubmit={saveProfile}>
+                      <FormField
+                        errorMessage={!profileDraft.username.trim() ? profileError : undefined}
+                        id="account-profile-username"
+                        label="사용자명"
+                        onChange={(event) => {
+                          setProfileDraft((current) => ({ ...current, username: event.target.value }));
+                          setProfileError("");
+                        }}
+                        required
+                        value={profileDraft.username}
+                      />
+                      <label className="account-profile-form__introduction" htmlFor="account-profile-introduction">
+                        <span>소개</span>
+                        <textarea
+                          className="ui-input"
+                          id="account-profile-introduction"
+                          onChange={(event) => setProfileDraft((current) => ({
+                            ...current,
+                            introduction: event.target.value,
+                          }))}
+                          value={profileDraft.introduction}
+                        />
+                      </label>
+                      {profileError && profileDraft.username.trim() ? (
+                        <p className="account-profile-form__error" role="alert">{profileError}</p>
+                      ) : null}
+                      <div className="account-profile-form__actions">
+                        <Button disabled={profileSaving} onClick={cancelProfileEdit} variant="secondary">취소</Button>
+                        <Button loading={profileSaving} type="submit">저장</Button>
+                      </div>
+                    </form>
+                  ) : null}
+                </>
               ) : null}
             </section>
 
@@ -329,20 +339,17 @@ export function AccountSettingsScreen() {
             </section>
 
             <section className="account-card" id="account-connections" tabIndex={-1}>
-              <h2>연결된 계정</h2>
+              <h2>GitHub 연결</h2>
               <div className="account-card__row account-connection-row">
                 <span aria-hidden="true" className="account-github-mark">GH</span>
                 <div className="account-card__copy">
-                  <h3>{connectedAccountMock.provider} · {connectedAccountMock.account}</h3>
-                  <p>{connectedAccountMock.description}</p>
+                  <h3>
+                    계정 연결 정보
+                    <span className="account-card__badge">준비 중</span>
+                  </h3>
+                  <p>GitHub 계정 연결 정보는 현재 제공하지 않습니다.</p>
+                  <p>GitHub 저장소 연결은 각 프로젝트 설정에서 관리할 수 있습니다.</p>
                 </div>
-                <Button
-                  onClick={() => setFeedback("GitHub 계정 연결 해제 기능은 아직 연결되지 않았습니다.")}
-                  size="sm"
-                  variant="secondary"
-                >
-                  연결 해제
-                </Button>
               </div>
             </section>
 

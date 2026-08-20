@@ -151,6 +151,100 @@ describe("Analysis API", () => {
     });
   });
 
+  it("finds an analysis summary by id on the first page", async () => {
+    const target = analysisListItem({ analysisId: 42, requestedBy: { userId: 7, username: "me" } });
+    const other = analysisListItem({ analysisId: 41, requestedBy: { userId: 9, username: "other" } });
+    const fetchMock = vi.fn().mockResolvedValue(apiResponse({
+      content: [other, target],
+      hasNext: false,
+      page: 0,
+      size: 100,
+      totalElements: 2,
+      totalPages: 1,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { getAnalysisSummaryById } = await loadAnalysisApi();
+
+    await expect(getAnalysisSummaryById(39, 128, 42)).resolves.toEqual(target);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("continues to the next page until the analysis id is found", async () => {
+    const target = analysisListItem({ analysisId: 99, requestedBy: { userId: 3, username: "owner" } });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(apiResponse({
+        content: [analysisListItem({ analysisId: 1 })],
+        hasNext: true,
+        page: 0,
+        size: 100,
+        totalElements: 2,
+        totalPages: 2,
+      }))
+      .mockResolvedValueOnce(apiResponse({
+        content: [target],
+        hasNext: false,
+        page: 1,
+        size: 100,
+        totalElements: 2,
+        totalPages: 2,
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { getAnalysisSummaryById } = await loadAnalysisApi();
+
+    await expect(getAnalysisSummaryById(39, 128, 99)).resolves.toEqual(target);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("page=1");
+  });
+
+  it("returns null when the analysis id is never found", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(apiResponse({
+      content: [analysisListItem({ analysisId: 1 })],
+      hasNext: false,
+      page: 0,
+      size: 100,
+      totalElements: 1,
+      totalPages: 1,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { getAnalysisSummaryById } = await loadAnalysisApi();
+
+    await expect(getAnalysisSummaryById(39, 128, 404)).resolves.toBeNull();
+  });
+
+  it("does not use a different analysis requester when looking up by id", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(apiResponse({
+      content: [
+        analysisListItem({ analysisId: 10, requestedBy: { userId: 1, username: "a" } }),
+        analysisListItem({ analysisId: 11, requestedBy: { userId: 2, username: "b" } }),
+      ],
+      hasNext: false,
+      page: 0,
+      size: 100,
+      totalElements: 2,
+      totalPages: 1,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { getAnalysisSummaryById } = await loadAnalysisApi();
+
+    await expect(getAnalysisSummaryById(39, 128, 11)).resolves.toMatchObject({
+      analysisId: 11,
+      requestedBy: { userId: 2, username: "b" },
+    });
+  });
+
+  it("aborts summary lookup when the signal is aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { getAnalysisSummaryById } = await loadAnalysisApi();
+
+    await expect(getAnalysisSummaryById(39, 128, 12, controller.signal)).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("gets analysis detail from the analysis URL and forwards AbortSignal", async () => {
     const detail = {
       analysisId: 12,

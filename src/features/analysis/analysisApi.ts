@@ -1,4 +1,5 @@
 import { ApiError, getApiErrorMessage, requestApiResult } from "../../shared/api/client";
+import { canRegisterMemoryByRole } from "./analysisPermissions";
 
 export type AnalysisStatus =
   | "PENDING"
@@ -376,8 +377,7 @@ export function canApproveAnalysisRecord(
 }
 
 export function canManageAnalysisMemory(permissionRole?: string | null) {
-  const role = permissionRole?.trim().toUpperCase();
-  return role === "OWNER" || role === "ADMIN";
+  return canRegisterMemoryByRole(permissionRole);
 }
 
 export function canRegisterAnalysisMemory({
@@ -523,6 +523,39 @@ export async function getLatestAnalysisByPrNumber(
 ) {
   const result = await getAnalyses(projectId, { prNumber, page: 0, size: 1 }, signal);
   return result.content[0] ?? null;
+}
+
+/**
+ * PR별 분석 목록에서 analysisId가 정확히 일치하는 summary를 찾는다.
+ * MEMBER의 edit/retry/cancel requester 판별용. OWNER/ADMIN은 호출할 필요 없음.
+ */
+export async function getAnalysisSummaryById(
+  projectId: string | number,
+  prNumber: number,
+  analysisId: string | number,
+  signal?: AbortSignal,
+) {
+  const targetId = Number(analysisId);
+  if (!Number.isFinite(targetId) || targetId <= 0) return null;
+
+  const pageSize = 100;
+  let page = 0;
+
+  while (true) {
+    if (signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    const result = await getAnalyses(
+      projectId,
+      { prNumber, page, size: pageSize },
+      signal,
+    );
+    const matched = result.content.find((item) => item.analysisId === targetId);
+    if (matched) return matched;
+    if (!result.hasNext) return null;
+    page += 1;
+  }
 }
 
 export function retryAnalysis(

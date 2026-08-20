@@ -51,8 +51,7 @@ import {
   type ProjectInvitation,
   type ProjectMember,
 } from "../team/projectTeamApi";
-import { BillingSettingsPanel, stateDescriptions } from "./BillingSettingsPanel";
-import { isBillingViewState } from "./billingSettingsMock";
+import { BillingSettingsPanel } from "./BillingSettingsPanel";
 import "./TeamProjectSettingsScreen.css";
 
 type SettingsTab = "project" | "github" | "members" | "billing";
@@ -93,6 +92,15 @@ function canManageProjectMembers(role?: string) {
   return normalized === "OWNER" || normalized === "ADMIN";
 }
 
+export function canEditProjectInfo(role?: string) {
+  const normalized = role?.toUpperCase();
+  return normalized === "OWNER" || normalized === "ADMIN";
+}
+
+export function canDeleteProjectInfo(role?: string) {
+  return role?.toUpperCase() === "OWNER";
+}
+
 function isOwnerMember(member: ProjectMember) {
   return member.permissionRole.toUpperCase() === "OWNER";
 }
@@ -129,8 +137,6 @@ export function TeamProjectSettingsScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab");
   const activeTab: SettingsTab = isSettingsTab(tabParam) ? tabParam : "members";
-  const billingStateParam = searchParams.get("billingState");
-  const billingState = isBillingViewState(billingStateParam) ? billingStateParam : "default";
   const [feedback, setFeedback] = useState("");
 
   const changeTab = (tabId: string) => {
@@ -150,16 +156,16 @@ export function TeamProjectSettingsScreen() {
             <header className="billing-settings__header">
               <div>
                 <h1>결제 및 플랜</h1>
-                <p>{stateDescriptions[billingState]}</p>
+                <p>결제 기능은 현재 준비 중입니다. 아래 내용은 예시 데이터입니다.</p>
                 <p aria-live="polite" className="billing-settings__feedback">{feedback}</p>
               </div>
               <Button
                 className="billing-settings__history-button"
-                onClick={() => setFeedback("결제 내역 기능은 현재 결제 시스템과 연결되어 있지 않습니다.")}
+                disabled
                 size="sm"
                 variant="secondary"
               >
-                결제 내역
+                준비 중
               </Button>
             </header>
           ) : (
@@ -190,10 +196,7 @@ export function TeamProjectSettingsScreen() {
             <MembersPanel onFeedback={setFeedback} />
           ) : null}
           {activeTab === "billing" ? (
-            <BillingSettingsPanel
-              onFeedback={setFeedback}
-              state={billingState}
-            />
+            <BillingSettingsPanel />
           ) : null}
         </div>
       </PageContainer>
@@ -201,7 +204,7 @@ export function TeamProjectSettingsScreen() {
   );
 }
 
-function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => void }) {
+export function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => void }) {
   const navigate = useNavigate();
   const {
     project,
@@ -216,17 +219,21 @@ function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => voi
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const canEditProject = canEditProjectInfo(project?.myPermissionRole);
+  const canDeleteProject = canDeleteProjectInfo(project?.myPermissionRole);
+  const fieldsDisabled = !canEditProject || saving;
 
   useEffect(() => {
     if (project) setFormValue(toProjectSettingsForm(project));
   }, [project]);
 
   const updateField = (field: keyof ProjectSettingsFormValue, value: string) => {
+    if (!canEditProject) return;
     setFormValue((current) => current ? { ...current, [field]: value } : current);
   };
 
   const resetForm = () => {
-    if (!project) return;
+    if (!project || !canEditProject) return;
     setFormValue(toProjectSettingsForm(project));
     onFeedback("프로젝트 정보 변경을 취소했습니다.");
   };
@@ -234,6 +241,10 @@ function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => voi
   const saveForm = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!project || !formValue || saving) return;
+    if (!canEditProject) {
+      onFeedback("프로젝트 정보 수정은 OWNER 또는 ADMIN만 가능합니다.");
+      return;
+    }
 
     const name = formValue.name.trim();
     if (!name) {
@@ -281,6 +292,12 @@ function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => voi
     }
   };
 
+  const openDeleteDialog = () => {
+    if (!canDeleteProject) return;
+    setDeleteDialogOpen(true);
+    setDeleteError("");
+  };
+
   const closeDeleteDialog = useCallback(() => {
     if (deleting) return;
     setDeleteDialogOpen(false);
@@ -290,6 +307,10 @@ function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => voi
 
   const confirmDelete = async () => {
     if (!project || deleteConfirmation !== project.name || deleting) return;
+    if (!canDeleteProject) {
+      setDeleteError("프로젝트 삭제는 OWNER만 가능합니다.");
+      return;
+    }
     setDeleting(true);
     setDeleteError("");
 
@@ -338,22 +359,29 @@ function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => voi
           description="프로젝트 이름과 목적 등 AI 분석에 사용하는 기본 정보를 관리합니다."
           title="프로젝트 정보"
         />
+        {!canEditProject ? (
+          <p className="settings-project-readonly" role="status">
+            현재 권한에서는 프로젝트 정보를 조회만 할 수 있습니다.
+            {" "}
+            프로젝트 정보 수정은 OWNER 또는 ADMIN만 가능합니다.
+          </p>
+        ) : null}
         <FormField
-          disabled={saving}
+          disabled={fieldsDisabled}
           label="프로젝트 이름"
           maxLength={150}
           onChange={(event) => updateField("name", event.target.value)}
           value={formValue.name}
         />
         <FormField
-          disabled={saving}
+          disabled={fieldsDisabled}
           label="한 줄 설명"
           maxLength={500}
           onChange={(event) => updateField("summary", event.target.value)}
           value={formValue.summary}
         />
         <FormField
-          disabled={saving}
+          disabled={fieldsDisabled}
           label="프로젝트 목적"
           onChange={(event) => updateField("purpose", event.target.value)}
           value={formValue.purpose}
@@ -362,7 +390,7 @@ function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => voi
           <label className="form-field__label" htmlFor="project-default-language">기본 언어</label>
           <select
             className="ui-input"
-            disabled={saving}
+            disabled={fieldsDisabled}
             id="project-default-language"
             onChange={(event) => updateField("defaultLanguage", event.target.value)}
             value={formValue.defaultLanguage}
@@ -372,10 +400,12 @@ function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => voi
             <option value="en">English</option>
           </select>
         </div>
-        <div className="settings-actions settings-actions--end">
-          <Button disabled={saving} onClick={resetForm} variant="secondary">변경 취소</Button>
-          <Button loading={saving} type="submit">변경사항 저장</Button>
-        </div>
+        {canEditProject ? (
+          <div className="settings-actions settings-actions--end">
+            <Button disabled={saving} onClick={resetForm} variant="secondary">변경 취소</Button>
+            <Button loading={saving} type="submit">변경사항 저장</Button>
+          </div>
+        ) : null}
       </form>
 
       <div className="team-project-settings__side-column">
@@ -392,22 +422,27 @@ function ProjectInfoPanel({ onFeedback }: { onFeedback: (message: string) => voi
         <section className="settings-card settings-danger-zone">
           <h2>Danger Zone</h2>
           <h3>프로젝트 삭제</h3>
-          <p>
-            프로젝트 삭제를 서버에 요청합니다. 삭제 전 프로젝트명 재입력이 필요합니다.
-          </p>
-          <Button onClick={() => {
-            setDeleteDialogOpen(true);
-            setDeleteError("");
-          }} variant="danger">
-            프로젝트 삭제
-          </Button>
+          {canDeleteProject ? (
+            <>
+              <p>
+                프로젝트 삭제를 서버에 요청합니다. 삭제 전 프로젝트명 재입력이 필요합니다.
+              </p>
+              <Button onClick={openDeleteDialog} variant="danger">
+                프로젝트 삭제
+              </Button>
+            </>
+          ) : (
+            <p className="settings-project-readonly" role="status">
+              프로젝트 삭제는 OWNER만 가능합니다.
+            </p>
+          )}
         </section>
       </div>
 
       <Modal
         description="프로젝트 삭제 후 처리 방식은 서버 정책을 따릅니다. 계속하려면 실제 프로젝트명을 확인해주세요."
         onClose={closeDeleteDialog}
-        open={deleteDialogOpen}
+        open={deleteDialogOpen && canDeleteProject}
         title="프로젝트를 삭제하시겠어요?"
       >
         <div className="settings-delete-dialog">

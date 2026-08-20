@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../shared/api/client";
+import { getCurrentUser } from "../../shared/api/session";
 import { PageContainer } from "../../shared/layouts";
 import { Badge, Button, EmptyState, ErrorState, LoadingState } from "../../shared/ui";
 import {
@@ -12,6 +13,7 @@ import {
   getAnalysis,
   getAnalysisApiErrorCode,
   getAnalysisFeedbackMessage,
+  getAnalysisSummaryById,
   getLatestAnalysisByPrNumber,
   isActiveAnalysisStatus,
   mapAnalysisDetailRecord,
@@ -29,6 +31,14 @@ import {
   type AnalysisResultEvidence,
   type AnalysisStatus,
 } from "./analysisApi";
+import {
+  canApproveAnalysisByRole,
+  canManageAnalysisOwnedAction,
+  canRequestAnalysisByRole,
+  canViewAnalysisContentByRole,
+  isAnalysisAdmin,
+  normalizePermissionRole,
+} from "./analysisPermissions";
 import {
   getPullRequest,
   getPullRequestApiErrorCode,
@@ -48,11 +58,19 @@ import {
   withDraftStringList,
 } from "./analysisEditDraft";
 import { PullRequestBodyMarkdown } from "./PullRequestBodyMarkdown";
+import { getAnalysisRequestActionLabel } from "./analysisRequestCopy";
 import type { ProjectWorkspaceContextValue } from "../workspace/WorkspaceShell";
 import "./PullRequestReviewScreen.css";
 
 const POLLING_INTERVAL_MS = 2000;
 const DEFAULT_VISIBLE_ANALYSIS_CHANGES = 8;
+const OWNED_ACTION_UNKNOWN_REQUESTER =
+  "분석 요청자 정보를 확인하지 못해 이 작업을 사용할 수 없습니다.";
+const OWNED_ACTION_DENIED =
+  "분석 수정·재시도·취소는 요청자 또는 OWNER/ADMIN만 가능합니다.";
+const VIEWER_ANALYSIS_DENIED =
+  "VIEWER 권한에서는 AI 분석을 요청하거나 조회할 수 없습니다.";
+
 
 const analysisStatusCopy: Record<
   AnalysisStatus,
@@ -74,9 +92,9 @@ type PullRequestSourceState =
   | "github-connection-required"
   | "error";
 
-type AnalysisLoadState = "loading" | "success" | "invalid" | "not-found" | "error";
+type AnalysisLoadState = "loading" | "success" | "invalid" | "not-found" | "error" | "forbidden";
 
-type AnalysisRestoreState = "idle" | "loading" | "ready" | "error";
+type AnalysisRestoreState = "idle" | "loading" | "ready" | "error" | "forbidden";
 
 /** GET analysis 상세 또는 수정/승인/메모리 API 응답으로 복원한 기록 상태. */
 type AnalysisRecordState = {
@@ -236,6 +254,18 @@ function AnalysisFeedback({
         title="AI 분석을 찾을 수 없습니다"
       />
     );
+  } else if (state === "forbidden") {
+    content = (
+      <EmptyState
+        description={VIEWER_ANALYSIS_DENIED}
+        details={(
+          <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
+            GitHub 작업 목록
+          </Link>
+        )}
+        title="AI 분석을 조회할 수 없습니다"
+      />
+    );
   } else {
     content = (
       <ErrorState
@@ -256,6 +286,11 @@ function AnalysisFeedback({
 export function PullRequestReviewScreen() {
   const { projectId = "", pullRequestId, analysisId } = useParams();
   const { project } = useOutletContext<ProjectWorkspaceContextValue>();
+  const currentUser = getCurrentUser();
+  const permissionRole = project?.myPermissionRole;
+  const canViewAnalysisContent = canViewAnalysisContentByRole(permissionRole);
+  const canRequestByRole = canRequestAnalysisByRole(permissionRole);
+  const canApproveByRole = canApproveAnalysisByRole(permissionRole);
   const [feedback, setFeedback] = useState("");
   const [analysisRequesting, setAnalysisRequesting] = useState(false);
   const [analysisActionPending, setAnalysisActionPending] = useState(false);
@@ -276,6 +311,10 @@ export function PullRequestReviewScreen() {
   const [analysisLoadState, setAnalysisLoadState] = useState<AnalysisLoadState>("loading");
   const [analysisError, setAnalysisError] = useState("");
   const [analysisRetryKey, setAnalysisRetryKey] = useState(0);
+  /** MEMBER owned-action용. undefined=로딩/미확인, null=조회 실패, number=요청자 */
+  const [analysisRequesterUserId, setAnalysisRequesterUserId] = useState<number | null | undefined>(
+    undefined,
+  );
   const navigate = useNavigate();
   const routeReference = pullRequestId ?? analysisId ?? "";
   const isPullRequestRoute = pullRequestId !== undefined;
@@ -299,42 +338,66 @@ export function PullRequestReviewScreen() {
   const displayedAnalysisResult = isEditingResult && editDraft
     ? editDraft
     : parsedAnalysisResult;
+  const normalizedRole = normalizePermissionRole(permissionRole);
+  const needsRequesterLookup = normalizedRole === "MEMBER"
+    && isAnalysisRoute
+    && Boolean(validAnalysisId);
+  const canManageOwnedAction = canManageAnalysisOwnedAction({
+    permissionRole,
+    currentUserId: currentUser?.id,
+    requestedByUserId: needsRequesterLookup ? analysisRequesterUserId : undefined,
+  });
+  const ownedActionDeniedMessage = needsRequesterLookup && !canManageOwnedAction
+    ? (analysisRequesterUserId === null
+      ? OWNED_ACTION_UNKNOWN_REQUESTER
+      : analysisRequesterUserId === undefined
+        ? ""
+        : OWNED_ACTION_DENIED)
+    : "";
   const canStartEditing = canEnterAnalysisEditMode({
     analysisStatus,
     recordStatus: analysisRecord?.recordStatus,
     isEditing: isEditingResult,
     pending: recordActionPending,
-  }) && Boolean(parsedAnalysisResult);
+  }) && Boolean(parsedAnalysisResult) && canManageOwnedAction;
   const canSaveRecord = canSaveAnalysisEditDraft({
     isEditing: isEditingResult,
     original: parsedAnalysisResult,
     draft: editDraft,
     pending: recordActionPending,
     recordStatus: analysisRecord?.recordStatus,
-  }) && Boolean(validAnalysisId);
+  }) && Boolean(validAnalysisId) && canManageOwnedAction;
   const canApproveRecord = canApproveAnalysisRecord(analysisRecord?.recordStatus, recordActionPending)
     && canApproveAnalysisWhileEditing(isEditingResult)
     && Boolean(validAnalysisId)
-    && analysisStatus === "COMPLETED";
+    && analysisStatus === "COMPLETED"
+    && canApproveByRole;
   const canRegisterMemory = canRegisterAnalysisMemory({
     recordStatus: analysisRecord?.recordStatus,
     memoryEnabled: analysisRecord?.memoryEnabled,
     pending: recordActionPending,
-    permissionRole: project?.myPermissionRole,
+    permissionRole,
   }) && Boolean(validAnalysisId);
-  const canManageMemory = canManageAnalysisMemory(project?.myPermissionRole);
+  const canManageMemory = canManageAnalysisMemory(permissionRole);
+  const canRetryFailedAnalysis = analysisStatus === "FAILED" && canManageOwnedAction;
+  const canCancelInProgressAnalysis = isAnalysisInProgress && canManageOwnedAction;
   const canRequestAnalysis = (
     !isPullRequestRoute || analysisRestoreState === "ready"
   ) && canRequestAnalysisAction({
     isEditing: isEditingResult,
     recordActionPending,
+  }) && canRequestByRole;
+  const isInitialAnalysis = isPullRequestRoute && analysisRestoreState === "ready";
+  const analysisActionLabel = getAnalysisRequestActionLabel({
+    isInitialAnalysis,
+    requesting: analysisRequesting,
   });
-
   useEffect(() => {
     setAnalysisRecord(null);
     setRecordActionPending(false);
     setIsEditingResult(false);
     setEditDraft(null);
+    setAnalysisRequesterUserId(undefined);
   }, [validAnalysisId]);
 
   useEffect(() => {
@@ -400,6 +463,12 @@ export function PullRequestReviewScreen() {
     if (!isPullRequestRoute) return;
     if (sourceState !== "success" || !pullRequest) return;
 
+    if (!canViewAnalysisContent) {
+      setAnalysisRestoreState("forbidden");
+      setAnalysisRestoreError("");
+      return;
+    }
+
     const controller = new AbortController();
     setAnalysisRestoreState("loading");
     setAnalysisRestoreError("");
@@ -429,6 +498,7 @@ export function PullRequestReviewScreen() {
     return () => controller.abort();
   }, [
     analysisRestoreRetryKey,
+    canViewAnalysisContent,
     isPullRequestRoute,
     navigate,
     projectId,
@@ -442,6 +512,13 @@ export function PullRequestReviewScreen() {
     if (!validAnalysisId) {
       setAnalysisLoadState("invalid");
       setAnalysis(undefined);
+      return;
+    }
+
+    if (!canViewAnalysisContent) {
+      setAnalysisLoadState("forbidden");
+      setAnalysis(undefined);
+      setAnalysisError("");
       return;
     }
 
@@ -506,7 +583,30 @@ export function PullRequestReviewScreen() {
       clearPollTimer();
       requestController?.abort();
     };
-  }, [analysisRetryKey, isAnalysisRoute, projectId, validAnalysisId]);
+  }, [analysisRetryKey, canViewAnalysisContent, isAnalysisRoute, projectId, validAnalysisId]);
+
+  useEffect(() => {
+    if (!needsRequesterLookup || !validAnalysisId || !analysisPrNumber) {
+      if (!needsRequesterLookup) setAnalysisRequesterUserId(undefined);
+      return;
+    }
+
+    const controller = new AbortController();
+    setAnalysisRequesterUserId(undefined);
+
+    void getAnalysisSummaryById(projectId, analysisPrNumber, validAnalysisId, controller.signal)
+      .then((summary) => {
+        if (controller.signal.aborted) return;
+        const userId = summary?.requestedBy?.userId;
+        setAnalysisRequesterUserId(typeof userId === "number" ? userId : null);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setAnalysisRequesterUserId(null);
+      });
+
+    return () => controller.abort();
+  }, [analysisPrNumber, needsRequesterLookup, projectId, validAnalysisId]);
 
   useEffect(() => {
     if (!isAnalysisRoute || !analysisPrNumber) return;
@@ -552,6 +652,10 @@ export function PullRequestReviewScreen() {
     if (analysisRequesting) return;
     if (recordActionPending) return;
     if (isEditingResult) return;
+    if (!canRequestByRole) {
+      setFeedback(VIEWER_ANALYSIS_DENIED);
+      return;
+    }
 
     setAnalysisRequesting(true);
     setFeedback("");
@@ -574,6 +678,10 @@ export function PullRequestReviewScreen() {
 
   const retryFailedAnalysis = async () => {
     if (!validAnalysisId || analysisActionPending) return;
+    if (!canRetryFailedAnalysis) {
+      setFeedback(ownedActionDeniedMessage || OWNED_ACTION_DENIED);
+      return;
+    }
 
     setAnalysisActionPending(true);
     setFeedback("");
@@ -590,6 +698,10 @@ export function PullRequestReviewScreen() {
 
   const cancelInProgressAnalysis = async () => {
     if (!validAnalysisId || analysisActionPending) return;
+    if (!canCancelInProgressAnalysis) {
+      setFeedback(ownedActionDeniedMessage || OWNED_ACTION_DENIED);
+      return;
+    }
 
     setAnalysisActionPending(true);
     setFeedback("");
@@ -628,6 +740,10 @@ export function PullRequestReviewScreen() {
 
   const saveDraft = async () => {
     if (!validAnalysisId || !canSaveRecord) return;
+    if (!canManageOwnedAction) {
+      setFeedback(ownedActionDeniedMessage || OWNED_ACTION_DENIED);
+      return;
+    }
     if (!isEditingResult || !editDraft) {
       setFeedback("수정 모드에서 내용을 변경한 뒤 저장할 수 있습니다.");
       return;
@@ -682,6 +798,10 @@ export function PullRequestReviewScreen() {
 
   const registerMemory = async () => {
     if (!validAnalysisId || !canRegisterMemory) return;
+    if (!isAnalysisAdmin(permissionRole)) {
+      setFeedback("프로젝트 메모리를 등록할 권한이 없습니다. OWNER 또는 ADMIN만 등록할 수 있습니다.");
+      return;
+    }
 
     setRecordActionPending(true);
     setFeedback("");
@@ -795,6 +915,7 @@ export function PullRequestReviewScreen() {
       <PageContainer size="full">
         <div className="pull-request-review__content">
           <ReviewHeader
+            analysisActionLabel={analysisActionLabel}
             analysisId={isAnalysisRoute ? analysisId : undefined}
             analysisRequesting={analysisRequesting}
             analysisStatus={isAnalysisRoute ? analysis?.analysisStatus : undefined}
@@ -824,12 +945,15 @@ export function PullRequestReviewScreen() {
           ) : isAnalysisRoute && analysisStatus === "FAILED" ? (
             <AnalysisFailedPanel
               actionPending={analysisActionPending}
+              canRetry={canRetryFailedAnalysis}
+              deniedMessage={ownedActionDeniedMessage}
               errorMessage={analysis?.errorMessage}
               onRetry={retryFailedAnalysis}
               pullRequest={pullRequest}
             />
           ) : isAnalysisRoute && analysisStatus === "CANCELED" ? (
             <AnalysisCanceledPanel
+              canRequestAnalysis={canRequestByRole}
               onAnalyze={startAnalysis}
               projectId={projectId}
               pullRequest={pullRequest}
@@ -838,6 +962,8 @@ export function PullRequestReviewScreen() {
             <AnalysisInProgressPanel
               actionPending={analysisActionPending}
               analysisStatus={analysisStatus!}
+              canCancel={canCancelInProgressAnalysis}
+              deniedMessage={ownedActionDeniedMessage}
               onCancel={cancelInProgressAnalysis}
             />
           ) : canShowCompletedWorkspace && pullRequest && pullRequestFiles && displayedAnalysisResult ? (
@@ -854,7 +980,9 @@ export function PullRequestReviewScreen() {
           ) : isPullRequestRoute && pullRequest && pullRequestFiles ? (
             <div className="pull-request-review__columns">
               <GitHubSourcePanel files={pullRequestFiles} pullRequest={pullRequest} />
-              {analysisRestoreState === "error" ? (
+              {analysisRestoreState === "forbidden" ? (
+                <ViewerAnalysisUnavailablePanel />
+              ) : analysisRestoreState === "error" ? (
                 <AnalysisRestoreErrorPanel
                   errorMessage={analysisRestoreError}
                   onRetry={() => setAnalysisRestoreRetryKey((key) => key + 1)}
@@ -878,22 +1006,23 @@ export function PullRequestReviewScreen() {
                   >
                     편집 취소
                   </Button>
-                ) : (
+                ) : canStartEditing ? (
                   <Button
-                    disabled={!canStartEditing}
                     onClick={startEditingResult}
                     variant="secondary"
                   >
                     수정
                   </Button>
-                )}
-                <Button
-                  disabled={!canSaveRecord}
-                  onClick={() => void saveDraft()}
-                  variant="secondary"
-                >
-                  {recordActionPending ? "저장 중..." : "임시 저장"}
-                </Button>
+                ) : null}
+                {isEditingResult ? (
+                  <Button
+                    disabled={!canSaveRecord}
+                    onClick={() => void saveDraft()}
+                    variant="secondary"
+                  >
+                    {recordActionPending ? "저장 중..." : "임시 저장"}
+                  </Button>
+                ) : null}
               </div>
               <div>
                 <Button disabled={recordActionPending || isEditingResult} onClick={copyDraft} variant="secondary">
@@ -906,6 +1035,12 @@ export function PullRequestReviewScreen() {
             </footer>
           ) : null}
 
+          {ownedActionDeniedMessage && canShowCompletedWorkspace && !canManageOwnedAction ? (
+            <p className="pull-request-review__permission-hint" role="status">
+              {ownedActionDeniedMessage}
+            </p>
+          ) : null}
+
           <p aria-live="polite" className="pull-request-review__feedback">
             {feedback}
           </p>
@@ -916,6 +1051,7 @@ export function PullRequestReviewScreen() {
 }
 
 type ReviewHeaderProps = {
+  analysisActionLabel: string;
   analysisId?: string;
   analysisStatus?: AnalysisStatus;
   analysisRequesting: boolean;
@@ -930,6 +1066,7 @@ type ReviewHeaderProps = {
 };
 
 function ReviewHeader({
+  analysisActionLabel,
   analysisId,
   analysisRequesting,
   analysisStatus,
@@ -986,27 +1123,29 @@ function ReviewHeader({
             GitHub에서 보기
           </a>
         ) : null}
-        {isApprovedView || analysisStatus === "FAILED" ? null : (
+        {isApprovedView || analysisStatus === "FAILED" || !canRequestAnalysis ? null : (
           <Button
             disabled={analyzeDisabled || !pullRequest}
             onClick={onAnalyze}
             size="sm"
             variant={analysisStatus === "CANCELED" ? "primary" : "secondary"}
           >
-            {analysisRequesting ? "분석 요청 중..." : "AI 재분석"}
+            {analysisActionLabel}
           </Button>
         )}
-        <Button
-          disabled={isApprovedView || !canApprove || recordActionPending}
-          onClick={onApprove}
-          size="sm"
-        >
-          {isApprovedView
-            ? "승인 완료"
-            : recordActionPending
-              ? "승인 중..."
-              : "승인 요청"}
-        </Button>
+        {canApprove || isApprovedView ? (
+          <Button
+            disabled={isApprovedView || !canApprove || recordActionPending}
+            onClick={onApprove}
+            size="sm"
+          >
+            {isApprovedView
+              ? "승인 완료"
+              : recordActionPending
+                ? "승인 중..."
+                : "승인 요청"}
+          </Button>
+        ) : null}
       </div>
     </header>
   );
@@ -1484,7 +1623,21 @@ function DraftPlaceholderPanel() {
       </header>
       <div className="pull-request-review__draft-empty">
         <p>AI 분석을 실행하면 PR 변경 내용을 바탕으로 프로젝트 기록 초안이 생성됩니다.</p>
-        <p>상단의 <strong>AI 재분석</strong> 버튼으로 분석을 시작할 수 있습니다.</p>
+        <p>상단의 <strong>AI 분석</strong> 버튼으로 분석을 시작할 수 있습니다.</p>
+      </div>
+    </section>
+  );
+}
+
+function ViewerAnalysisUnavailablePanel() {
+  return (
+    <section className="pull-request-review__panel pull-request-review__draft" aria-labelledby="viewer-analysis-title">
+      <header>
+        <h2 id="viewer-analysis-title">AI 분석을 이용할 수 없습니다</h2>
+        <Badge variant="neutral">권한 없음</Badge>
+      </header>
+      <div className="pull-request-review__draft-empty">
+        <p>{VIEWER_ANALYSIS_DENIED}</p>
       </div>
     </section>
   );
@@ -2183,10 +2336,14 @@ function AnalysisInsightCard({
 function AnalysisInProgressPanel({
   analysisStatus,
   actionPending,
+  canCancel,
+  deniedMessage,
   onCancel,
 }: {
   analysisStatus: AnalysisStatus;
   actionPending: boolean;
+  canCancel: boolean;
+  deniedMessage?: string;
   onCancel: () => void;
 }) {
   const statusLabel = analysisStatusCopy[analysisStatus].label;
@@ -2199,9 +2356,15 @@ function AnalysisInProgressPanel({
       <p className="pull-request-review__state-status">현재 상태 · {statusLabel}</p>
       <p className="pull-request-review__state-hint">분석 중에는 페이지를 나가도 작업이 계속됩니다.</p>
       <div className="pull-request-review__state-actions">
-        <Button disabled={actionPending} onClick={onCancel} variant="secondary">
-          {actionPending ? "취소 요청 중..." : "분석 취소"}
-        </Button>
+        {canCancel ? (
+          <Button disabled={actionPending} onClick={onCancel} variant="secondary">
+            {actionPending ? "취소 요청 중..." : "분석 취소"}
+          </Button>
+        ) : (
+          <p className="pull-request-review__permission-hint" role="status">
+            {deniedMessage || "분석 취소는 요청자 또는 OWNER/ADMIN만 가능합니다."}
+          </p>
+        )}
       </div>
     </section>
   );
@@ -2209,11 +2372,15 @@ function AnalysisInProgressPanel({
 
 function AnalysisFailedPanel({
   actionPending,
+  canRetry,
+  deniedMessage,
   errorMessage,
   onRetry,
   pullRequest,
 }: {
   actionPending: boolean;
+  canRetry: boolean;
+  deniedMessage?: string;
   errorMessage?: string | null;
   onRetry: () => void;
   pullRequest?: PullRequestDetail;
@@ -2228,9 +2395,15 @@ function AnalysisFailedPanel({
         <span>{errorMessage?.trim() || "상세 오류 메시지가 제공되지 않았습니다."}</span>
       </aside>
       <div className="pull-request-review__state-actions">
-        <Button disabled={actionPending} onClick={onRetry}>
-          {actionPending ? "재시도 중..." : "AI 재분석"}
-        </Button>
+        {canRetry ? (
+          <Button disabled={actionPending} onClick={onRetry}>
+            {actionPending ? "재시도 중..." : "AI 재분석"}
+          </Button>
+        ) : (
+          <p className="pull-request-review__permission-hint" role="status">
+            {deniedMessage || OWNED_ACTION_DENIED}
+          </p>
+        )}
         {pullRequest ? (
           <a
             aria-label={`GitHub에서 Pull Request #${pullRequest.prNumber} 보기 (새 탭)`}
@@ -2248,10 +2421,12 @@ function AnalysisFailedPanel({
 }
 
 function AnalysisCanceledPanel({
+  canRequestAnalysis,
   onAnalyze,
   projectId,
   pullRequest,
 }: {
+  canRequestAnalysis: boolean;
   onAnalyze: () => void;
   projectId: string;
   pullRequest?: PullRequestDetail;
@@ -2262,7 +2437,13 @@ function AnalysisCanceledPanel({
       <h2 id="analysis-state-title">AI 분석이 취소되었습니다</h2>
       <p>요청한 분석이 중단되었습니다. 필요하면 다시 분석을 시작할 수 있습니다.</p>
       <div className="pull-request-review__state-actions">
-        <Button onClick={onAnalyze}>AI 재분석</Button>
+        {canRequestAnalysis ? (
+          <Button onClick={onAnalyze}>AI 재분석</Button>
+        ) : (
+          <p className="pull-request-review__permission-hint" role="status">
+            {VIEWER_ANALYSIS_DENIED}
+          </p>
+        )}
         <Link className="ui-button ui-button--secondary ui-button--md" to={`/projects/${projectId}/github`}>
           GitHub 작업 목록
         </Link>

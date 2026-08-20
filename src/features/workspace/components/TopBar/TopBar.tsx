@@ -15,7 +15,7 @@ export function TopBar({
   title,
   subtitle,
   user,
-  userEmail = "hong@example.com",
+  userEmail = "",
   actions,
   onMenuClick,
   onProfileFeedback,

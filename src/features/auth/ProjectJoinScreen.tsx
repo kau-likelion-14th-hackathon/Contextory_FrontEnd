@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getApiErrorMessage } from "../../shared/api/client";
 import { getAccessToken } from "../../shared/api/session";
 import { AuthLayout } from "../../shared/layouts";
 import { Button } from "../../shared/ui";
+import { logout } from "./authApi";
+import { resolveInvitationToken } from "./invitationRedirect";
 import {
   acceptProjectInvitation,
   getProjectTeamApiErrorCode,
@@ -31,27 +33,36 @@ function getJoinErrorMessage(code: string | undefined, fallback: string) {
 }
 
 export function ProjectJoinScreen() {
-  const { token } = useParams();
+  const { token: pathToken } = useParams();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const isLoggedIn = Boolean(getAccessToken());
   const [accepting, setAccepting] = useState(false);
+  const [switchingAccount, setSwitchingAccount] = useState(false);
   const [errorView, setErrorView] = useState<JoinErrorView | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
-  const invitationPath = token ? `/invitations/${token}` : undefined;
-  const authRedirect = invitationPath
-    ? `?redirect=${encodeURIComponent(invitationPath)}`
+  const resolvedInvitationToken = resolveInvitationToken({
+    pathToken,
+    queryToken: searchParams.get("token"),
+  });
+  const invitationReturnPath = resolvedInvitationToken
+    ? `${location.pathname}${location.search}`
+    : undefined;
+  const authRedirect = invitationReturnPath
+    ? `?redirect=${encodeURIComponent(invitationReturnPath)}`
     : "";
 
   async function handleAccept() {
-    if (!token || accepting) return;
+    if (!resolvedInvitationToken || accepting) return;
 
     setAccepting(true);
     setErrorView(null);
     setErrorMessage("");
 
     try {
-      const response = await acceptProjectInvitation(token);
+      const response = await acceptProjectInvitation(resolvedInvitationToken);
       navigate(`/projects/${response.projectId}/home`, { replace: true });
     } catch (error: unknown) {
       const code = getProjectTeamApiErrorCode(error);
@@ -62,7 +73,20 @@ export function ProjectJoinScreen() {
     }
   }
 
-  if (!token) {
+  async function handleSwitchAccount() {
+    if (switchingAccount) return;
+    setSwitchingAccount(true);
+
+    try {
+      await logout();
+    } catch {
+      // logout()은 실패해도 로컬 세션을 정리하므로 계정 전환을 계속한다.
+    }
+
+    navigate(`/auth/login${authRedirect}`, { replace: true });
+  }
+
+  if (!resolvedInvitationToken) {
     return (
       <AuthLayout
         description="초대 링크를 확인한 뒤 프로젝트에 참여할 수 있습니다."
@@ -123,7 +147,11 @@ export function ProjectJoinScreen() {
         <JoinErrorCard
           description={errorMessage}
           onProjects={() => navigate("/projects")}
-          secondaryAction={{ label: "로그인 화면으로", to: `/auth/login${authRedirect}` }}
+          secondaryAction={{
+            label: "다른 계정으로 로그인",
+            loading: switchingAccount,
+            onClick: () => void handleSwitchAccount(),
+          }}
           title="현재 계정으로 수락할 수 없습니다"
         />
       </AuthLayout>
@@ -194,7 +222,12 @@ function JoinErrorCard({
   title: string;
   description: string;
   onProjects: () => void;
-  secondaryAction?: { label: string; to: string };
+  secondaryAction?: {
+    label: string;
+    to?: string;
+    onClick?: () => void;
+    loading?: boolean;
+  };
 }) {
   return (
     <div className="auth-card auth-card--centered">
@@ -205,7 +238,16 @@ function JoinErrorCard({
       <Button fullWidth onClick={onProjects} variant="primary">
         프로젝트 목록으로
       </Button>
-      {secondaryAction ? (
+      {secondaryAction?.onClick ? (
+        <Button
+          fullWidth
+          loading={secondaryAction.loading}
+          onClick={secondaryAction.onClick}
+          variant="secondary"
+        >
+          {secondaryAction.label}
+        </Button>
+      ) : secondaryAction?.to ? (
         <p className="auth-card__switch">
           <Link to={secondaryAction.to}>{secondaryAction.label}</Link>
         </p>

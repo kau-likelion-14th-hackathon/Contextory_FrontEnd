@@ -39,6 +39,14 @@ function stubBrowserWindow() {
   return browserWindow;
 }
 
+const sampleUser = {
+  id: 1,
+  introduction: "hello",
+  loginId: "user@example.com",
+  profileImage: "",
+  username: "사용자",
+};
+
 beforeEach(() => {
   vi.resetModules();
 });
@@ -49,36 +57,105 @@ afterEach(() => {
 });
 
 describe("auth session", () => {
+  it("stores keepSignedIn=false sessions in sessionStorage only", async () => {
+    const browserWindow = stubBrowserWindow();
+    const {
+      getSession,
+      getSessionSource,
+      hasPersistentLoginIntent,
+      setSession,
+    } = await import("./session");
+
+    setSession({ accessToken: "token", user: sampleUser }, false);
+
+    expect(getSessionSource()).toBe("session");
+    expect(hasPersistentLoginIntent()).toBe(false);
+    expect(browserWindow.sessionStorage.getItem("contextory.session")).toContain("token");
+    expect(browserWindow.localStorage.getItem("contextory.session")).toBeNull();
+    expect(browserWindow.localStorage.getItem("contextory.persist-login")).toBeNull();
+    expect(getSession()?.user?.loginId).toBe("user@example.com");
+  });
+
+  it("stores keepSignedIn=true sessions in localStorage only", async () => {
+    const browserWindow = stubBrowserWindow();
+    const {
+      getSessionSource,
+      hasPersistentLoginIntent,
+      setSession,
+    } = await import("./session");
+
+    setSession({ accessToken: "token", user: sampleUser }, true);
+
+    expect(getSessionSource()).toBe("local");
+    expect(hasPersistentLoginIntent()).toBe(true);
+    expect(browserWindow.localStorage.getItem("contextory.session")).toContain("token");
+    expect(browserWindow.sessionStorage.getItem("contextory.session")).toBeNull();
+    expect(browserWindow.localStorage.getItem("contextory.persist-login")).toBe("1");
+  });
+
+  it("clears local/session storage and persistent-login intent", async () => {
+    const browserWindow = stubBrowserWindow();
+    const {
+      clearSession,
+      getSession,
+      hasPersistentLoginIntent,
+      setSession,
+    } = await import("./session");
+
+    setSession({ accessToken: "token", user: sampleUser }, true);
+    clearSession();
+
+    expect(getSession()).toBeUndefined();
+    expect(hasPersistentLoginIntent()).toBe(false);
+    expect(browserWindow.localStorage.getItem("contextory.session")).toBeNull();
+    expect(browserWindow.sessionStorage.getItem("contextory.session")).toBeNull();
+    expect(browserWindow.localStorage.getItem("contextory.persist-login")).toBeNull();
+  });
+
   it("keeps a persistent session in localStorage when updating its token", async () => {
     const browserWindow = stubBrowserWindow();
-    const { getSession, setSession, updateAccessToken } = await import("./session");
+    const { getSession, getSessionSource, setSession, updateAccessToken } = await import("./session");
 
-    setSession({ accessToken: "old", user: {
-      id: 1,
-      introduction: "hello",
-      loginId: "user@example.com",
-      profileImage: "",
-      username: "사용자",
-    } }, true);
+    setSession({ accessToken: "old", user: sampleUser }, true);
     updateAccessToken("new");
 
     expect(getSession()).toMatchObject({
       accessToken: "new",
       user: { loginId: "user@example.com" },
     });
-    expect(browserWindow.localStorage.length).toBe(1);
-    expect(browserWindow.sessionStorage.length).toBe(0);
+    expect(getSessionSource()).toBe("local");
+    expect(browserWindow.localStorage.getItem("contextory.session")).toContain("new");
+    expect(browserWindow.sessionStorage.getItem("contextory.session")).toBeNull();
   });
 
   it("keeps a non-persistent session in sessionStorage when updating its token", async () => {
     const browserWindow = stubBrowserWindow();
-    const { getAccessToken, setSession, updateAccessToken } = await import("./session");
+    const { getAccessToken, getSessionSource, setSession, updateAccessToken } = await import("./session");
 
-    setSession({ accessToken: "old" }, false);
+    setSession({ accessToken: "old", user: sampleUser }, false);
     updateAccessToken("new");
 
     expect(getAccessToken()).toBe("new");
-    expect(browserWindow.localStorage.length).toBe(0);
-    expect(browserWindow.sessionStorage.length).toBe(1);
+    expect(getSessionSource()).toBe("session");
+    expect(browserWindow.localStorage.getItem("contextory.session")).toBeNull();
+    expect(browserWindow.sessionStorage.getItem("contextory.session")).toContain("new");
+  });
+
+  it("writes cold-start reissue tokens to localStorage when persist intent is set", async () => {
+    const browserWindow = stubBrowserWindow();
+    const {
+      getSessionSource,
+      hasPersistentLoginIntent,
+      updateAccessToken,
+    } = await import("./session");
+
+    browserWindow.localStorage.setItem("contextory.persist-login", "1");
+    expect(hasPersistentLoginIntent()).toBe(true);
+
+    updateAccessToken("restored-token");
+
+    expect(getSessionSource()).toBe("local");
+    expect(browserWindow.localStorage.getItem("contextory.session")).toContain("restored-token");
+    expect(browserWindow.sessionStorage.getItem("contextory.session")).toBeNull();
   });
 });

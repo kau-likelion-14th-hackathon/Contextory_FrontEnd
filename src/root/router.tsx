@@ -16,6 +16,7 @@ import { ProjectMemoryScreen } from "../features/memory/ProjectMemoryScreen";
 import { TeamProjectSettingsScreen } from "../features/settings/TeamProjectSettingsScreen";
 import {
   AuthBoundary,
+  GuestBoundary,
   ProjectBoundary,
 } from "../features/workspace/RouteBoundaries";
 import { WorkspaceShell } from "../features/workspace/WorkspaceShell";
@@ -24,15 +25,20 @@ import { NotFoundScreen } from "../features/workspace/WorkspaceScreens";
 export const router = createBrowserRouter([
   {
     path: "/",
-    element: <Navigate to="/auth/login" replace />,
+    element: <Navigate to="/projects" replace />,
   },
   {
-    path: "/auth/login",
-    element: <AuthScreen mode="login" />, // 로그인 화면
-  },
-  {
-    path: "/auth/signup",
-    element: <AuthScreen mode="signup" />,  // 회원가입 화면
+    element: <GuestBoundary />,
+    children: [
+      {
+        path: "/auth/login",
+        element: <AuthScreen mode="login" />, // 로그인 화면
+      },
+      {
+        path: "/auth/signup",
+        element: <AuthScreen mode="signup" />, // 회원가입 화면
+      },
+    ],
   },
   {
     path: "/auth/forgot-password",
@@ -51,8 +57,12 @@ export const router = createBrowserRouter([
     element: <KakaoCallbackScreen />,
   },
   {
+    path: "/invitations/accept",
+    element: <ProjectJoinScreen />, // BE 초대 메일 query 링크
+  },
+  {
     path: "/invitations/:token",
-    element: <ProjectJoinScreen />, // 프로젝트 초대 화면
+    element: <ProjectJoinScreen />, // 기존 path 초대 링크
   },
   {
     path: "/dev/ui",
