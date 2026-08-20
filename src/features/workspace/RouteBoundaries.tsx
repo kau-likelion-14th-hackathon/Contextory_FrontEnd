@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { reissue } from "../auth/authApi";
+import { bootstrapAuthSession } from "../auth/authApi";
 import {
-  getAccessToken,
+  hasAuthenticatedSession,
   subscribeToSession,
 } from "../../shared/api/session";
 
@@ -11,26 +11,27 @@ type AuthStatus = "checking" | "authenticated" | "unauthenticated";
 export function AuthBoundary() {
   const location = useLocation();
   const [status, setStatus] = useState<AuthStatus>(() =>
-    getAccessToken() ? "authenticated" : "checking",
+    hasAuthenticatedSession() ? "authenticated" : "checking",
   );
 
   useEffect(() => {
     let active = true;
+    let bootstrapping = true;
 
-    const syncStatus = () => {
-      if (active) setStatus(getAccessToken() ? "authenticated" : "unauthenticated");
-    };
-    const unsubscribe = subscribeToSession(syncStatus);
+    const unsubscribe = subscribeToSession(() => {
+      if (!active) return;
+      if (hasAuthenticatedSession()) {
+        setStatus("authenticated");
+        return;
+      }
+      // cold-start bootstrap 중 token-only 상태를 unauthenticated로 만들지 않는다.
+      if (!bootstrapping) setStatus("unauthenticated");
+    });
 
-    if (!getAccessToken()) {
-      reissue()
-        .then(() => {
-          if (active) setStatus("authenticated");
-        })
-        .catch(() => {
-          if (active) setStatus("unauthenticated");
-        });
-    }
+    void bootstrapAuthSession().then((next) => {
+      bootstrapping = false;
+      if (active) setStatus(next);
+    });
 
     return () => {
       active = false;

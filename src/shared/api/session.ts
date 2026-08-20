@@ -1,6 +1,7 @@
 import { setAuthHeaderProvider } from "./client";
 
 const SESSION_KEY = "contextory.session";
+const PERSIST_LOGIN_KEY = "contextory.persist-login";
 const SESSION_CHANGE_EVENT = "contextory:session-change";
 
 export type SessionUser = {
@@ -66,7 +67,32 @@ function removeSession(source: SessionSource) {
   }
 }
 
+function writePersistentLoginIntent(enabled: boolean) {
+  try {
+    if (enabled) window.localStorage.setItem(PERSIST_LOGIN_KEY, "1");
+    else window.localStorage.removeItem(PERSIST_LOGIN_KEY);
+  } catch {
+    // Storage 사용 불가면 intent를 유지하지 않습니다.
+  }
+}
+
+export function hasPersistentLoginIntent() {
+  try {
+    return window.localStorage.getItem(PERSIST_LOGIN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function clearPersistentLoginIntent() {
+  writePersistentLoginIntent(false);
+}
+
 let storedSession = readSession("local") ?? readSession("session");
+// 기존 localStorage 세션은 로그인 상태 유지 ON으로 간주해 intent를 복원한다.
+if (storedSession?.source === "local") {
+  writePersistentLoginIntent(true);
+}
 
 function notifySessionChange() {
   window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));
@@ -75,6 +101,7 @@ function notifySessionChange() {
 export function setSession(session: AuthSession, persist: boolean) {
   const source: SessionSource = persist ? "local" : "session";
   storedSession = { session, source };
+  writePersistentLoginIntent(persist);
 
   writeSession(storedSession);
   removeSession(source === "local" ? "session" : "local");
@@ -85,6 +112,10 @@ export function getSession() {
   return storedSession?.session;
 }
 
+export function getSessionSource() {
+  return storedSession?.source;
+}
+
 export function getCurrentUser() {
   return getSession()?.user;
 }
@@ -93,16 +124,27 @@ export function getAccessToken() {
   return getSession()?.accessToken;
 }
 
+export function hasAuthenticatedSession() {
+  return Boolean(getAccessToken() && getCurrentUser());
+}
+
 export function updateAccessToken(accessToken: string) {
+  const previousSource = storedSession?.source;
+  const source: SessionSource = previousSource
+    ?? (hasPersistentLoginIntent() ? "local" : "session");
+
   storedSession = {
     session: {
       ...storedSession?.session,
       accessToken,
     },
-    source: storedSession?.source ?? "session",
+    source,
   };
 
   writeSession(storedSession);
+  if (!previousSource) {
+    removeSession(source === "local" ? "session" : "local");
+  }
   notifySessionChange();
 }
 
@@ -121,6 +163,7 @@ export function clearSession() {
   storedSession = undefined;
   removeSession("local");
   removeSession("session");
+  clearPersistentLoginIntent();
   notifySessionChange();
 }
 

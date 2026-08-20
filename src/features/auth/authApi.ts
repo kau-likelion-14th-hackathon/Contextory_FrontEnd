@@ -4,9 +4,16 @@ import {
 } from "../../shared/api/client";
 import {
   clearSession,
+  getAccessToken,
+  getCurrentUser,
+  hasAuthenticatedSession,
+  hasPersistentLoginIntent,
   updateAccessToken,
+  updateSessionUser,
   type AuthSession,
+  type SessionUser,
 } from "../../shared/api/session";
+import { getMyInfo, type MyInfoResponse } from "../account/accountApi";
 
 export type AuthResponse = {
   id: number;
@@ -47,6 +54,16 @@ export function toAuthSession(response: AuthResponse): AuthSession {
       introduction: response.introduction,
       profileImage: response.profileImage,
     },
+  };
+}
+
+export function toSessionUser(response: MyInfoResponse): SessionUser {
+  return {
+    id: response.userId,
+    loginId: response.loginId,
+    username: response.username,
+    introduction: response.introduction,
+    profileImage: response.profileImage,
   };
 }
 
@@ -105,6 +122,49 @@ export function reissue() {
   }
 
   return reissuePromise;
+}
+
+export async function hydrateCurrentUser() {
+  const me = await getMyInfo();
+  if (!getAccessToken()) {
+    clearSession();
+    throw new Error("Access token missing after user hydration.");
+  }
+  updateSessionUser(toSessionUser(me));
+  if (!getCurrentUser()) {
+    clearSession();
+    throw new Error("Failed to store hydrated user.");
+  }
+}
+
+/** AuthBoundary cold-start / incomplete-session bootstrap. Runtime 401 reissue와 분리된다. */
+export async function bootstrapAuthSession(): Promise<"authenticated" | "unauthenticated"> {
+  if (hasAuthenticatedSession()) return "authenticated";
+
+  if (getAccessToken() && !getCurrentUser()) {
+    try {
+      await hydrateCurrentUser();
+      return hasAuthenticatedSession() ? "authenticated" : "unauthenticated";
+    } catch {
+      clearSession();
+      return "unauthenticated";
+    }
+  }
+
+  if (!hasPersistentLoginIntent()) return "unauthenticated";
+
+  try {
+    await reissue();
+    await hydrateCurrentUser();
+    if (!hasAuthenticatedSession()) {
+      clearSession();
+      return "unauthenticated";
+    }
+    return "authenticated";
+  } catch {
+    clearSession();
+    return "unauthenticated";
+  }
 }
 
 export async function logout() {
