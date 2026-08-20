@@ -169,12 +169,39 @@
   gap: 8px;
 }
 
-.github-work__pagination-controls > span {
-  color: var(--color-text-primary);
+.github-work__pagination-pages {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.github-work__pagination-page {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font: inherit;
   font-size: 12px;
   font-weight: 700;
+  height: 32px;
   min-width: 32px;
+  padding: 0 8px;
+}
+
+.github-work__pagination-page--current,
+.github-work__pagination-page[aria-current="page"] {
+  background: var(--color-surface-selected);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.github-work__pagination-ellipsis {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  min-width: 20px;
   text-align: center;
+  user-select: none;
 }
 
 .github-work__panel > .feedback-state {
@@ -315,7 +342,14 @@
     width: 100%;
   }
 
-  .github-work__pagination-controls .ui-button {
+  .github-work__pagination-pages {
+    justify-content: center;
+    order: 3;
+    width: 100%;
+  }
+
+  .github-work__pagination-controls .ui-button,
+  .github-work__pagination-page {
     height: 44px;
     min-height: 44px;
     min-width: 44px;
