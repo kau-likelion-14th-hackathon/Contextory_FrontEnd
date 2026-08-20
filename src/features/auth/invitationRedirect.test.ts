@@ -69,10 +69,43 @@ describe("post-auth redirect helpers", () => {
     } = await import("./invitationRedirect");
 
     expect(isSafeInvitationRedirectPath("/invitations/abc123")).toBe(true);
+    expect(isSafeInvitationRedirectPath("/invitations/accept?token=query-token")).toBe(true);
+    expect(isSafeInvitationRedirectPath("/invitations/accept")).toBe(false);
     expect(isSafeInvitationRedirectPath("/projects/1/home")).toBe(false);
+    expect(isSafeInvitationRedirectPath("/auth/login")).toBe(false);
+    expect(isSafeInvitationRedirectPath("https://evil.example.com")).toBe(false);
+    expect(isSafeInvitationRedirectPath("//evil.example.com")).toBe(false);
     expect(getSafeInvitationRedirectPath("/invitations/token")).toBe("/invitations/token");
+    expect(getSafeInvitationRedirectPath("/invitations/accept?token=query-token"))
+      .toBe("/invitations/accept?token=query-token");
     expect(getSafeInvitationRedirectPath("https://evil.com")).toBeUndefined();
     expect(getSafeInvitationRedirectPath("/projects/12/github/pulls/42")).toBeUndefined();
+  });
+
+  it("resolves invitation tokens from path or query without treating accept as a token", async () => {
+    const { resolveInvitationToken } = await import("./invitationRedirect");
+
+    expect(resolveInvitationToken({ pathToken: "path-token" })).toBe("path-token");
+    expect(resolveInvitationToken({
+      pathToken: undefined,
+      queryToken: "query-token",
+    })).toBe("query-token");
+    expect(resolveInvitationToken({
+      pathToken: "path-token",
+      queryToken: "query-token",
+    })).toBe("path-token");
+    expect(resolveInvitationToken({
+      pathToken: "accept",
+      queryToken: "query-token",
+    })).toBe("query-token");
+    expect(resolveInvitationToken({
+      pathToken: "accept",
+      queryToken: null,
+    })).toBeUndefined();
+    expect(resolveInvitationToken({
+      pathToken: "  ",
+      queryToken: "  ",
+    })).toBeUndefined();
   });
 
   it("resolves protected URL return path from location.state.from", async () => {
@@ -110,6 +143,11 @@ describe("post-auth redirect helpers", () => {
       redirectParam: "/invitations/invite-token",
       locationState: { from: "/projects/12/github/pulls/42" },
     })).toBe("/invitations/invite-token");
+
+    expect(resolvePostAuthPath({
+      redirectParam: "/invitations/accept?token=query-token",
+      locationState: { from: "/projects/12/home" },
+    })).toBe("/invitations/accept?token=query-token");
   });
 
   it("preserves return path across login/signup switch state", async () => {
@@ -135,6 +173,9 @@ describe("post-auth redirect helpers", () => {
 
     setKakaoAuthReturnPath("/invitations/token");
     expect(consumeKakaoAuthReturnPath()).toBe("/invitations/token");
+
+    setKakaoAuthReturnPath("/invitations/accept?token=query-token");
+    expect(consumeKakaoAuthReturnPath()).toBe("/invitations/accept?token=query-token");
   });
 
   it("rejects unsafe kakao return paths and clears stored values", async () => {

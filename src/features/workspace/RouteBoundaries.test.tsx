@@ -75,6 +75,14 @@ describe("auth entry routing", () => {
           ],
         },
         {
+          path: "/invitations/accept",
+          element: <div>invitation-query-screen</div>,
+        },
+        {
+          path: "/invitations/:token",
+          element: <div>invitation-path-screen</div>,
+        },
+        {
           element: <AuthBoundary />,
           children: [
             { path: "/projects", element: <div>projects-screen</div> },
@@ -132,6 +140,49 @@ describe("auth entry routing", () => {
 
     expect(router.state.location.pathname).toBe("/projects");
     expect(container.textContent).toContain("projects-screen");
+  });
+
+  it("redirects authenticated users with invitation redirect query to the invitation", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { setSession } = await import("../../shared/api/session");
+    setSession({ accessToken: "token", user: sampleUser }, true);
+
+    const router = await renderApp("/auth/login?redirect=%2Finvitations%2Faccept%3Ftoken%3Dquery-token");
+    await flushEffects();
+
+    expect(router.state.location.pathname).toBe("/invitations/accept");
+    expect(router.state.location.search).toBe("?token=query-token");
+    expect(container.textContent).toContain("invitation-query-screen");
+  });
+
+  it("keeps invitation redirect after persistent cold-start reissue on auth page", async () => {
+    window.localStorage.setItem("contextory.persist-login", "1");
+
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(successResult("restored-token"))
+      .mockResolvedValueOnce(successResult({
+        userId: 7,
+        loginId: "user@example.com",
+        username: "사용자",
+        introduction: "소개",
+        profileImage: "",
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const router = await renderApp("/auth/login?redirect=%2Finvitations%2Faccept%3Ftoken%3Dquery-token");
+
+    await act(async () => {
+      await vi.waitFor(() => {
+        expect(router.state.location.pathname).toBe("/invitations/accept");
+      });
+    });
+
+    expect(router.state.location.search).toBe("?token=query-token");
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "https://api.test/api/auth/reissue",
+      "https://api.test/api/users/me",
+    ]);
   });
 
   it("redirects authenticated users from /auth/signup to /projects", async () => {

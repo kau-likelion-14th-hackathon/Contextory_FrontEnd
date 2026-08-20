@@ -57,8 +57,12 @@ export const router = createBrowserRouter([
     element: <KakaoCallbackScreen />,
   },
   {
+    path: "/invitations/accept",
+    element: <ProjectJoinScreen />, // BE 초대 메일 query 링크
+  },
+  {
     path: "/invitations/:token",
-    element: <ProjectJoinScreen />, // 프로젝트 초대 화면
+    element: <ProjectJoinScreen />, // 기존 path 초대 링크
   },
   {
     path: "/dev/ui",

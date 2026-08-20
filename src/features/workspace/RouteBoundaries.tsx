@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Navigate, Outlet, useLocation, useSearchParams } from "react-router-dom";
 import { bootstrapAuthSession } from "../auth/authApi";
+import { resolvePostAuthPath } from "../auth/invitationRedirect";
 import {
   hasAuthenticatedSession,
   subscribeToSession,
@@ -66,11 +67,17 @@ export function AuthBoundary() {
 
 /** 이미 로그인된 사용자가 login/signup에 머물지 않도록 한다. AuthBoundary와 반대로 guest만 Outlet을 본다. */
 export function GuestBoundary() {
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const status = useAuthBootstrap();
 
   if (status === "checking") return <AuthCheckingStatus />;
   if (status === "authenticated") {
-    return <Navigate replace to="/projects" />;
+    const nextPath = resolvePostAuthPath({
+      redirectParam: searchParams.get("redirect"),
+      locationState: location.state,
+    });
+    return <Navigate replace to={nextPath} />;
   }
 
   return <Outlet />;
